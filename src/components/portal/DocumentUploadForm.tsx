@@ -37,7 +37,7 @@ export function DocumentUploadForm({
     setLoading(true);
     setMessage("");
     const form = new FormData();
-    form.append("customerId", customerId);
+    form.append("clientId", customerId);
     form.append("type", type);
     form.append("title", title || DOCUMENT_TYPE_LABELS[type]);
     form.append("visibility", visibility);

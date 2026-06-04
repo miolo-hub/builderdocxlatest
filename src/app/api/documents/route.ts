@@ -18,7 +18,8 @@ export async function POST(request: Request) {
   }
 
   const form = await request.formData();
-  const clientId = form.get("clientId") as string;
+  const clientId =
+    (form.get("clientId") as string) || (form.get("customerId") as string);
   const type = form.get("type") as string;
   const title = (form.get("title") as string) || type;
   const visibility = (form.get("visibility") as string) || "customer";
@@ -28,7 +29,16 @@ export async function POST(request: Request) {
   const notifyCustomer = form.get("notifyCustomer") === "true";
 
   if (!clientId || !type || !file) {
-    return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: !file
+          ? "Please select a file to upload"
+          : !clientId
+            ? "Client ID is required"
+            : "Document type is required",
+      },
+      { status: 400 }
+    );
   }
 
   const client = await getClientById(clientId, user!.builderId);

@@ -22,6 +22,7 @@ export const CLIENT_STAGE_LABELS: Record<string, string> = {
   booked: "Booked",
   active_buyer: "Active buyer",
   completed: "Completed",
+  cancelled: "Cancelled",
 };
 
 export const CLIENT_STAGES = Object.keys(CLIENT_STAGE_LABELS);

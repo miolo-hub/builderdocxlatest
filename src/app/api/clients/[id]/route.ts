@@ -33,7 +33,28 @@ export async function PATCH(
   }
 
   try {
-    const client = await updateClientStage(id, user!.builderId, stage);
+    if (
+      body.unit !== undefined ||
+      body.projectName !== undefined ||
+      body.tower !== undefined
+    ) {
+      await getPrisma().client.update({
+        where: { id },
+        data: {
+          ...(body.unit !== undefined && { unit: String(body.unit).trim() || null }),
+          ...(body.projectName !== undefined && {
+            projectName: String(body.projectName).trim() || null,
+          }),
+          ...(body.tower !== undefined && {
+            tower: String(body.tower).trim() || null,
+          }),
+        },
+      });
+    }
+
+    const client = await updateClientStage(id, user!.builderId, stage, {
+      unitId: body.unitId ? String(body.unitId) : undefined,
+    });
     if (!client) {
       return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }

@@ -47,20 +47,21 @@ export async function findClientByPhone(phone: string, builderId?: string) {
 export async function updateClientStage(
   clientId: string,
   builderId: string,
-  stage: string
+  stage: string,
+  options?: { unitId?: string }
 ) {
   if (!CLIENT_STAGES.includes(stage)) {
-    throw new Error("Invalid client stage");
+    throw new Error("Invalid client status");
   }
-  const existing = await getPrisma().client.findFirst({
-    where: { id: clientId, builderId },
-  });
-  if (!existing) return null;
-
-  return getPrisma().client.update({
-    where: { id: clientId },
-    data: { stage },
-  });
+  const { syncClientInventoryForStage } = await import("./client-inventory-sync");
+  const result = await syncClientInventoryForStage(
+    clientId,
+    builderId,
+    stage,
+    options
+  );
+  if (!result.client) return null;
+  return result.client;
 }
 
 export async function createClient(
@@ -81,7 +82,8 @@ export async function createClient(
   const existing = await findClientByPhone(phone, builderId);
   if (existing) throw new Error("A client with this phone number already exists");
 
-  return getPrisma().client.create({
+  const stage = data.stage ?? "prospect";
+  const client = await getPrisma().client.create({
     data: {
       id: generateId("client"),
       builderId,
@@ -91,9 +93,19 @@ export async function createClient(
       unit: data.unit?.trim() || null,
       tower: data.tower?.trim() || null,
       projectName: data.projectName?.trim() || null,
-      stage: data.stage ?? "prospect",
+      stage: stage === "booked" ? "prospect" : stage,
       source: data.source ?? null,
       assignedAgentId: data.assignedAgentId ?? null,
     },
   });
+
+  if (stage !== "prospect") {
+    const { syncClientInventoryForStage } = await import("./client-inventory-sync");
+    await syncClientInventoryForStage(client.id, builderId, stage);
+    return (
+      (await getPrisma().client.findUnique({ where: { id: client.id } })) ?? client
+    );
+  }
+
+  return client;
 }

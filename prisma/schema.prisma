@@ -120,7 +120,7 @@ model Client {
   unit            String? // legacy display
   tower           String?
   projectName     String?  @map("project_name")
-  stage           String   @default("prospect") // prospect | interested | negotiating | booked | active_buyer | completed
+  stage           String   @default("prospect") // prospect | interested | negotiating | booked | active_buyer | completed | cancelled
   source          String?
   address         String?
   idProofType     String?  @map("id_proof_type")

@@ -80,6 +80,14 @@ export async function POST(request: Request) {
       },
     });
 
+    await tx.unit.updateMany({
+      where: {
+        clientId: body.clientId,
+        id: { not: body.unitId },
+      },
+      data: { status: "available", clientId: null, bookingDate: null },
+    });
+
     await tx.client.update({
       where: { id: body.clientId },
       data: {

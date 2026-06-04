@@ -7,6 +7,7 @@ import { PropTrackShell } from "@/components/portal/PropTrackShell";
 import { BookFlatModal } from "@/components/portal/BookFlatModal";
 import { DocumentUploadForm } from "@/components/portal/DocumentUploadForm";
 import { ClientStageSelect } from "@/components/portal/ClientStageSelect";
+import { ClientUnitLink } from "@/components/portal/ClientUnitLink";
 import { DOCUMENT_TYPE_LABELS } from "@/lib/constants";
 import { can, type UserRole } from "@/lib/rbac";
 
@@ -51,7 +52,10 @@ export default function ClientDetailPage() {
 
   if (!user || !client) return null;
 
-  const canBook = can(user.role, "deals.manage") && client.deals.length === 0;
+  const canBook =
+    can(user.role, "deals.manage") &&
+    client.deals.length === 0 &&
+    client.stage !== "cancelled";
   const canEditStage = can(user.role, "clients.update_stage");
   const deal = client.deals[0];
 
@@ -92,6 +96,16 @@ export default function ClientDetailPage() {
             )}
           </div>
         </div>
+        {canEditStage && !deal && client.stage !== "cancelled" && (
+          <ClientUnitLink
+            clientId={id}
+            projectName={client.projectName}
+            unit={client.unit}
+            tower={client.tower}
+            canEdit={canEditStage}
+            onSaved={() => void load()}
+          />
+        )}
       </div>
 
       <BookFlatModal

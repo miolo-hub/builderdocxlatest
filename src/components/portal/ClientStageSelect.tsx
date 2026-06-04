@@ -26,9 +26,14 @@ export function ClientStageSelect({
     setValue(stage);
   }, [stage]);
 
+  const badgeClass =
+    stage === "cancelled"
+      ? "bg-slate-200 text-slate-700"
+      : "bg-teal-50 text-teal-800";
+
   if (!canEdit) {
     return (
-      <span className={`badge bg-teal-50 text-teal-800 ${compact ? "text-xs" : ""}`}>
+      <span className={`badge ${badgeClass} ${compact ? "text-xs" : ""}`}>
         {CLIENT_STAGE_LABELS[stage] ?? stage}
       </span>
     );

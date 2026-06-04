@@ -17,6 +17,7 @@ model Builder {
   email           String?
   supportHours    String?  @map("support_hours")
   whatsappDemoOtp String?  @map("whatsapp_demo_otp")
+  priceBreakupFieldConfig String? @map("price_breakup_field_config")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
@@ -130,6 +131,8 @@ model Client {
   tags            String?
   assignedAgentId String?  @map("assigned_agent_id")
   preferredUnitId String?  @map("preferred_unit_id")
+  workflowStep    String   @default("prospect") @map("workflow_step")
+  workflowData    String?  @map("workflow_data")
   notes           String?
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")

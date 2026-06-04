@@ -53,7 +53,15 @@ export async function getClientById(id: string, builderId?: string) {
     where: builderId ? { id, builderId } : { id },
     include: {
       assignedAgent: true,
-      preferredUnit: { include: { project: true } },
+      preferredUnit: {
+        select: {
+          id: true,
+          unitNumber: true,
+          block: true,
+          areaSqft: true,
+          project: { select: { name: true } },
+        },
+      },
       deals: { include: { unit: { include: { project: true } }, schedule: true } },
       documents: { orderBy: { createdAt: "desc" } },
       activities: { orderBy: { createdAt: "desc" }, take: 50 },

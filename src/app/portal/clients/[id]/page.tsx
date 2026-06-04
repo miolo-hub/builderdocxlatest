@@ -8,6 +8,7 @@ import { BookFlatModal } from "@/components/portal/BookFlatModal";
 import { DocumentUploadForm } from "@/components/portal/DocumentUploadForm";
 import { ClientStageSelect } from "@/components/portal/ClientStageSelect";
 import { ClientUnitLink } from "@/components/portal/ClientUnitLink";
+import { ClientWorkflow } from "@/components/portal/ClientWorkflow";
 import { DOCUMENT_TYPE_LABELS } from "@/lib/constants";
 import { can, type UserRole } from "@/lib/rbac";
 
@@ -25,6 +26,8 @@ export default function ClientDetailPage() {
     projectName: string | null;
     assignedAgentId: string | null;
     linkedUnitId?: string | null;
+    workflowStep?: string;
+    workflowData?: string | null;
     documents: { id: string; title: string; type: string; visibility: string }[];
     deals: {
       id: string;
@@ -58,6 +61,7 @@ export default function ClientDetailPage() {
     client.deals.length === 0 &&
     client.stage !== "cancelled";
   const canEditStage = can(user.role, "clients.update_stage");
+  const canManageWorkflow = can(user.role, "clients.manage");
   const deal = client.deals[0];
 
   return (
@@ -110,6 +114,17 @@ export default function ClientDetailPage() {
         )}
       </div>
 
+      <div className="mb-8">
+        <ClientWorkflow
+          clientId={id}
+          clientName={client.name}
+          workflowStep={client.workflowStep ?? "prospect"}
+          workflowDataRaw={client.workflowData ?? null}
+          canEdit={canManageWorkflow}
+          onUpdated={() => void load()}
+        />
+      </div>
+
       <BookFlatModal
         open={showBook}
         clientId={id}
@@ -124,7 +139,19 @@ export default function ClientDetailPage() {
           <h3 className="mb-4 font-semibold">Documents</h3>
           <ul className="space-y-2 text-sm">
             {client.documents.map((d) => (
-              <li key={d.id}>{d.title || DOCUMENT_TYPE_LABELS[d.type]}</li>
+              <li key={d.id} className="flex items-center justify-between gap-2">
+                <span>{d.title || DOCUMENT_TYPE_LABELS[d.type]}</span>
+                <button
+                  type="button"
+                  className="text-xs text-teal-700 hover:underline"
+                  onClick={async () => {
+                    const res = await fetch(`/api/documents/${d.id}/download-url`);
+                    if (res.ok) window.open((await res.json()).downloadUrl, "_blank");
+                  }}
+                >
+                  Download
+                </button>
+              </li>
             ))}
             {client.documents.length === 0 && <li className="text-[var(--muted)]">None</li>}
           </ul>

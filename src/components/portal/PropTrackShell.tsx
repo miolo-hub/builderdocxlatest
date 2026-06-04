@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ROLE_LABELS, type UserRole } from "@/lib/rbac";
+import { can, ROLE_LABELS, type UserRole } from "@/lib/rbac";
 
 const NAV = [
   { href: "/portal/dashboard", label: "Dashboard", icon: "📊" },
@@ -14,6 +14,12 @@ const NAV = [
   { href: "/portal/audit", label: "Activity Log", icon: "📋" },
   { href: "/simulator", label: "WhatsApp Simulator", icon: "💬" },
 ];
+
+const SETTINGS_NAV = {
+  href: "/portal/settings/price-breakup",
+  label: "Price breakup fields",
+  icon: "⚙️",
+};
 
 interface PropTrackShellProps {
   user: { name: string; role: UserRole; builderName?: string };
@@ -58,6 +64,19 @@ export function PropTrackShell({ user, children }: PropTrackShellProps) {
               {item.label}
             </Link>
           ))}
+          {can(user.role, "clients.manage") && (
+            <Link
+              href={SETTINGS_NAV.href}
+              className={`mt-4 flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
+                pathname.startsWith(SETTINGS_NAV.href)
+                  ? "bg-teal-50 text-[var(--brand)]"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              <span>{SETTINGS_NAV.icon}</span>
+              {SETTINGS_NAV.label}
+            </Link>
+          )}
         </nav>
       </aside>
 

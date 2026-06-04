@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { ProjectProgressEditor } from "@/components/portal/ProjectProgressEditor";
 import { PropTrackShell } from "@/components/portal/PropTrackShell";
-import type { UserRole } from "@/lib/rbac";
+import { can, type UserRole } from "@/lib/rbac";
 
 const STATUS_COLOR: Record<string, string> = {
   available: "bg-green-100 text-green-800",
@@ -13,10 +14,19 @@ const STATUS_COLOR: Record<string, string> = {
   blocked: "bg-slate-200 text-slate-700",
 };
 
+type ProjectMeta = {
+  id: string;
+  name: string;
+  location: string;
+  status: string;
+  constructionPct: number;
+};
+
 export default function InventoryPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [user, setUser] = useState<{ name: string; role: UserRole; builderName?: string } | null>(null);
+  const [project, setProject] = useState<ProjectMeta | null>(null);
   const [units, setUnits] = useState<{
     id: string;
     unitNumber: string;
@@ -34,8 +44,13 @@ export default function InventoryPage() {
       return;
     }
     setUser((await me.json()).user);
-    const res = await fetch(`/api/projects/${id}/units`);
-    if (res.ok) setUnits((await res.json()).units);
+
+    const [projRes, unitsRes] = await Promise.all([
+      fetch(`/api/projects/${id}`),
+      fetch(`/api/projects/${id}/units`),
+    ]);
+    if (projRes.ok) setProject((await projRes.json()).project);
+    if (unitsRes.ok) setUnits((await unitsRes.json()).units);
   }, [id, router]);
 
   useEffect(() => {
@@ -44,12 +59,33 @@ export default function InventoryPage() {
 
   if (!user) return null;
 
+  const canEditProgress = can(user.role, "projects.manage");
+
   return (
     <PropTrackShell user={user}>
       <Link href="/portal/projects" className="mb-4 inline-block text-sm text-teal-700 hover:underline">
         ← Projects
       </Link>
-      <h1 className="mb-2 text-2xl font-bold">Inventory grid</h1>
+
+      {project && (
+        <>
+          <h1 className="text-2xl font-bold">{project.name}</h1>
+          {project.location && (
+            <p className="mb-4 text-sm text-[var(--muted)]">{project.location}</p>
+          )}
+          <div className="mb-6 max-w-md">
+            <ProjectProgressEditor
+              projectId={project.id}
+              status={project.status}
+              constructionPct={project.constructionPct}
+              canEdit={canEditProgress}
+              onUpdated={() => void load()}
+            />
+          </div>
+        </>
+      )}
+
+      <h2 className="mb-2 text-lg font-semibold">Inventory grid</h2>
       <p className="mb-6 text-sm text-[var(--muted)]">
         🟢 Available · 🟡 Reserved · 🔴 Sold · ⚫ Blocked
       </p>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { AddProjectModal } from "@/components/portal/AddProjectModal";
+import { ProjectProgressEditor } from "@/components/portal/ProjectProgressEditor";
 import { PropTrackShell } from "@/components/portal/PropTrackShell";
 import { PROJECT_STATUS_LABELS, PROJECT_STATUSES } from "@/lib/constants";
 import { can, type UserRole } from "@/lib/rbac";
@@ -71,6 +72,7 @@ export default function ProjectsPage() {
   if (!user) return null;
 
   const canAdd = can(user.role, "projects.manage");
+  const canEditProgress = can(user.role, "projects.manage");
   const canDelete = can(user.role, "projects.delete");
 
   return (
@@ -120,15 +122,22 @@ export default function ProjectsPage() {
               <Link href={`/portal/projects/${p.id}`} className="block hover:border-teal-300">
                 <h2 className="font-semibold pr-16">{p.name}</h2>
                 <p className="text-sm text-[var(--muted)]">{p.location || "—"}</p>
-                <p className="mt-2 text-sm">
-                  <strong>{p._count.units}</strong> units · {p.constructionPct}% built ·{" "}
-                  {PROJECT_STATUS_LABELS[p.status] ?? p.status}
-                </p>
                 <p className="mt-1 text-xs text-[var(--muted)]">
-                  🟢 {p.unitCounts.available} avail · 🟡 {p.unitCounts.reserved} reserved · 🔴{" "}
-                  {p.unitCounts.sold} sold · ⚫ {p.unitCounts.blocked} blocked
+                  <strong>{p._count.units}</strong> units · 🟢 {p.unitCounts.available} avail · 🟡{" "}
+                  {p.unitCounts.reserved} reserved · 🔴 {p.unitCounts.sold} sold · ⚫{" "}
+                  {p.unitCounts.blocked} blocked
                 </p>
               </Link>
+              <div className="mt-3 border-t border-slate-100 pt-3">
+                <ProjectProgressEditor
+                  projectId={p.id}
+                  status={p.status}
+                  constructionPct={p.constructionPct}
+                  canEdit={canEditProgress}
+                  compact
+                  onUpdated={() => load(query, statusFilter)}
+                />
+              </div>
               {canDelete && (
                 <button
                   type="button"

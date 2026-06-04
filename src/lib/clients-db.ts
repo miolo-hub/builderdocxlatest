@@ -1,3 +1,4 @@
+import { CLIENT_STAGES } from "./constants";
 import { normalizePhone } from "./bot-sessions";
 import { getPrisma } from "./prisma";
 import { generateId } from "./store";
@@ -41,6 +42,25 @@ export async function findClientByPhone(phone: string, builderId?: string) {
     ? await getPrisma().client.findMany({ where: { builderId } })
     : await getPrisma().client.findMany({ orderBy: { name: "asc" } });
   return rows.find((c) => normalizePhone(c.phone) === normalized) ?? null;
+}
+
+export async function updateClientStage(
+  clientId: string,
+  builderId: string,
+  stage: string
+) {
+  if (!CLIENT_STAGES.includes(stage)) {
+    throw new Error("Invalid client stage");
+  }
+  const existing = await getPrisma().client.findFirst({
+    where: { id: clientId, builderId },
+  });
+  if (!existing) return null;
+
+  return getPrisma().client.update({
+    where: { id: clientId },
+    data: { stage },
+  });
 }
 
 export async function createClient(

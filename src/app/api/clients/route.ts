@@ -5,11 +5,16 @@ import { listClients, createClient } from "@/lib/clients-db";
 export async function GET(request: Request) {
   const { user, error } = await requireUser();
   if (error) return error;
-  const q = new URL(request.url).searchParams.get("q") ?? "";
-  const clients = filterClientsForRole(
+  const params = new URL(request.url).searchParams;
+  const q = params.get("q") ?? "";
+  const stage = params.get("stage")?.trim() ?? "";
+  let clients = filterClientsForRole(
     user!,
     await listClients(user!.builderId, q)
   );
+  if (stage) {
+    clients = clients.filter((c) => c.stage === stage);
+  }
   return NextResponse.json({ clients });
 }
 

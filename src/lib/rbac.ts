@@ -26,6 +26,7 @@ type Permission =
   | "projects.manage"
   | "units.manage"
   | "clients.manage"
+  | "clients.update_stage"
   | "clients.view_all"
   | "deals.manage"
   | "payments.view"
@@ -54,8 +55,10 @@ const PERMISSIONS: Record<UserRole, Permission[]> = {
     "users.manage",
   ],
   sales_agent: [
+    "projects.manage",
     "units.manage",
     "clients.manage",
+    "clients.update_stage",
     "deals.manage",
     "payments.view",
     "documents.manage",

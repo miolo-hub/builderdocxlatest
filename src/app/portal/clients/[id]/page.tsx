@@ -6,7 +6,8 @@ import { useCallback, useEffect, useState } from "react";
 import { PropTrackShell } from "@/components/portal/PropTrackShell";
 import { BookFlatModal } from "@/components/portal/BookFlatModal";
 import { DocumentUploadForm } from "@/components/portal/DocumentUploadForm";
-import { CLIENT_STAGE_LABELS, DOCUMENT_TYPE_LABELS } from "@/lib/constants";
+import { ClientStageSelect } from "@/components/portal/ClientStageSelect";
+import { DOCUMENT_TYPE_LABELS } from "@/lib/constants";
 import { can, type UserRole } from "@/lib/rbac";
 
 export default function ClientDetailPage() {
@@ -51,6 +52,7 @@ export default function ClientDetailPage() {
   if (!user || !client) return null;
 
   const canBook = can(user.role, "deals.manage") && client.deals.length === 0;
+  const canEditStage = can(user.role, "clients.update_stage");
   const deal = client.deals[0];
 
   return (
@@ -72,9 +74,13 @@ export default function ClientDetailPage() {
             )}
           </div>
           <div className="flex flex-col items-end gap-2">
-            <span className="badge bg-teal-50 text-teal-800">
-              {CLIENT_STAGE_LABELS[client.stage] ?? client.stage}
-            </span>
+            <label className="text-xs font-medium text-[var(--muted)]">Client status</label>
+            <ClientStageSelect
+              clientId={id}
+              stage={client.stage}
+              canEdit={canEditStage}
+              onUpdated={() => void load()}
+            />
             {canBook && (
               <button
                 type="button"

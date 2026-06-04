@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { CLIENT_STAGE_LABELS, CLIENT_STAGES } from "@/lib/constants";
 
 interface AddCustomerModalProps {
   open: boolean;
@@ -13,6 +14,14 @@ interface Project {
   name: string;
 }
 
+interface UnitOption {
+  id: string;
+  unitNumber: string;
+  block: string | null;
+  floor: string | null;
+  status: string;
+}
+
 export function AddCustomerModal({
   open,
   onClose,
@@ -21,10 +30,11 @@ export function AddCustomerModal({
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [unit, setUnit] = useState("");
-  const [tower, setTower] = useState("");
-  const [projectName, setProjectName] = useState("");
+  const [stage, setStage] = useState("prospect");
+  const [projectId, setProjectId] = useState("");
+  const [unitId, setUnitId] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
+  const [units, setUnits] = useState<UnitOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -35,24 +45,58 @@ export function AddCustomerModal({
       .then((data) => {
         const list = (data.projects ?? []) as Project[];
         setProjects(list);
-        if (list.length === 1) setProjectName(list[0].name);
+        if (list.length === 1) setProjectId(list[0].id);
       });
   }, [open]);
 
+  useEffect(() => {
+    if (!projectId) {
+      setUnits([]);
+      setUnitId("");
+      return;
+    }
+    void fetch(`/api/projects/${projectId}/units`)
+      .then((res) => res.json())
+      .then((data) => {
+        const list = ((data.units ?? []) as UnitOption[]).sort((a, b) =>
+          a.unitNumber.localeCompare(b.unitNumber, undefined, { numeric: true })
+        );
+        setUnits(list);
+        setUnitId("");
+      });
+  }, [projectId]);
+
   if (!open) return null;
+
+  const selectedProject = projects.find((p) => p.id === projectId);
 
   function resetForm() {
     setName("");
     setPhone("");
     setEmail("");
-    setUnit("");
-    setTower("");
-    setProjectName("");
+    setStage("prospect");
+    setProjectId("");
+    setUnitId("");
+    setUnits([]);
     setError("");
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!projectId) {
+      setError("Select a project");
+      return;
+    }
+    if (!unitId) {
+      setError("Select a flat from the project inventory");
+      return;
+    }
+    const selected = units.find((u) => u.id === unitId);
+    if (!selected) {
+      setError("Invalid flat selection");
+      return;
+    }
+
     setLoading(true);
     setError("");
     const res = await fetch("/api/clients", {
@@ -62,15 +106,17 @@ export function AddCustomerModal({
         name,
         phone,
         email,
-        unit,
-        tower,
-        projectName,
+        stage,
+        unitId: selected.id,
+        unit: selected.unitNumber,
+        tower: selected.block,
+        projectName: selectedProject?.name,
       }),
     });
     setLoading(false);
     const data = await res.json();
     if (!res.ok) {
-      setError(data.error ?? "Failed to add customer");
+      setError(data.error ?? "Failed to add client");
       return;
     }
     resetForm();
@@ -126,49 +172,62 @@ export function AddCustomerModal({
               onChange={(e) => setEmail(e.target.value)}
             />
           </label>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block text-sm">
-              <span className="mb-1 block font-medium">Unit / flat</span>
-              <input
-                className="input"
-                placeholder="4B"
-                value={unit}
-                onChange={(e) => setUnit(e.target.value)}
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="mb-1 block font-medium">Tower / block</span>
-              <input
-                className="input"
-                placeholder="Tower 2"
-                value={tower}
-                onChange={(e) => setTower(e.target.value)}
-              />
-            </label>
-          </div>
+
           <label className="block text-sm">
-            <span className="mb-1 block font-medium">Project</span>
-            {projects.length > 0 ? (
-              <select
-                className="input"
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
-              >
-                <option value="">Select project</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.name}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                className="input"
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
-                placeholder="No projects yet — enter name"
-              />
-            )}
+            <span className="mb-1 block font-medium">Project *</span>
+            <select
+              className="input"
+              value={projectId}
+              onChange={(e) => setProjectId(e.target.value)}
+              required
+            >
+              <option value="">Select project</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium">Flat / unit *</span>
+            <select
+              className="input"
+              value={unitId}
+              onChange={(e) => setUnitId(e.target.value)}
+              required
+              disabled={!projectId || units.length === 0}
+            >
+              <option value="">
+                {!projectId
+                  ? "Select project first"
+                  : units.length === 0
+                    ? "No flats in this project"
+                    : "Select flat"}
+              </option>
+              {units.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.unitNumber}
+                  {u.block ? ` · ${u.block}` : ""}
+                  {u.floor ? ` · floor ${u.floor}` : ""} — {u.status}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-[var(--muted)]">
+              Picked from inventory so status updates always match (e.g. A101, B102).
+            </p>
+          </label>
+
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium">Initial status</span>
+            <select className="input" value={stage} onChange={(e) => setStage(e.target.value)}>
+              {CLIENT_STAGES.map((s) => (
+                <option key={s} value={s}>
+                  {CLIENT_STAGE_LABELS[s]}
+                </option>
+              ))}
+            </select>
           </label>
 
           {error && <p className="text-sm text-red-600">{error}</p>}

@@ -8,13 +8,11 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const q = params.get("q") ?? "";
   const stage = params.get("stage")?.trim() ?? "";
-  let clients = filterClientsForRole(
+  const project = params.get("project")?.trim() ?? "";
+  const clients = filterClientsForRole(
     user!,
-    await listClients(user!.builderId, q)
+    await listClients(user!.builderId, q, { stage, project })
   );
-  if (stage) {
-    clients = clients.filter((c) => c.stage === stage);
-  }
   return NextResponse.json({ clients });
 }
 
@@ -25,6 +23,7 @@ export async function POST(request: Request) {
   const payload = {
     ...body,
     projectName: body.projectName ?? body.project,
+    unitId: body.unitId ?? undefined,
   };
   try {
     const client = await createClient(user!.builderId, payload);

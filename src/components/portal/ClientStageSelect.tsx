@@ -6,6 +6,7 @@ import { CLIENT_STAGE_LABELS, CLIENT_STAGES } from "@/lib/constants";
 interface ClientStageSelectProps {
   clientId: string;
   stage: string;
+  linkedUnitId?: string | null;
   canEdit: boolean;
   onUpdated: () => void;
   compact?: boolean;
@@ -14,6 +15,7 @@ interface ClientStageSelectProps {
 export function ClientStageSelect({
   clientId,
   stage,
+  linkedUnitId,
   canEdit,
   onUpdated,
   compact,
@@ -46,7 +48,10 @@ export function ClientStageSelect({
     const res = await fetch(`/api/clients/${clientId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ stage: next }),
+      body: JSON.stringify({
+        stage: next,
+        ...(linkedUnitId ? { unitId: linkedUnitId } : {}),
+      }),
     });
     setSaving(false);
     if (!res.ok) {

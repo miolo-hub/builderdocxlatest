@@ -33,8 +33,17 @@ export async function resolveClientUnit(
     unit: string | null;
     tower: string | null;
     projectName: string | null;
+    preferredUnitId?: string | null;
   }
 ) {
+  if (client.preferredUnitId) {
+    const preferred = await tx.unit.findFirst({
+      where: { id: client.preferredUnitId, project: { builderId: client.builderId } },
+      include: { project: true },
+    });
+    if (preferred) return preferred;
+  }
+
   const deal = await tx.deal.findFirst({
     where: { clientId: client.id },
     include: { unit: { include: { project: true } } },
@@ -237,6 +246,7 @@ export async function syncClientInventoryForStage(
         unit: unit.unitNumber,
         tower: unit.block ?? client.tower,
         projectName: unit.project.name,
+        preferredUnitId: unit.id,
       },
     });
 

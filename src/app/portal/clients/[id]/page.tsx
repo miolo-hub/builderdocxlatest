@@ -24,6 +24,7 @@ export default function ClientDetailPage() {
     tower: string | null;
     projectName: string | null;
     assignedAgentId: string | null;
+    linkedUnitId?: string | null;
     documents: { id: string; title: string; type: string; visibility: string }[];
     deals: {
       id: string;
@@ -82,6 +83,7 @@ export default function ClientDetailPage() {
             <ClientStageSelect
               clientId={id}
               stage={client.stage}
+              linkedUnitId={client.linkedUnitId}
               canEdit={canEditStage}
               onUpdated={() => void load()}
             />

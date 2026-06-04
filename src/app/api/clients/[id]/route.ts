@@ -52,8 +52,11 @@ export async function PATCH(
       });
     }
 
+    const existing = await getClientById(id, user!.builderId);
     const client = await updateClientStage(id, user!.builderId, stage, {
-      unitId: body.unitId ? String(body.unitId) : undefined,
+      unitId: body.unitId
+        ? String(body.unitId)
+        : existing?.preferredUnitId ?? undefined,
     });
     if (!client) {
       return NextResponse.json({ error: "Client not found" }, { status: 404 });

@@ -83,10 +83,11 @@ model Unit {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  project Project @relation(fields: [projectId], references: [id])
-  client  Client? @relation(fields: [clientId], references: [id])
-  agent   Agent?  @relation(fields: [agentId], references: [id])
-  deals   Deal[]
+  project          Project  @relation(fields: [projectId], references: [id])
+  client           Client?  @relation(fields: [clientId], references: [id])
+  preferredForClients Client[] @relation("ClientPreferredUnit")
+  agent            Agent?   @relation(fields: [agentId], references: [id])
+  deals            Deal[]
 
   @@unique([projectId, unitNumber])
   @@index([projectId])
@@ -128,11 +129,13 @@ model Client {
   language        String   @default("en")
   tags            String?
   assignedAgentId String?  @map("assigned_agent_id")
+  preferredUnitId String?  @map("preferred_unit_id")
   notes           String?
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
   assignedAgent Agent?         @relation("AssignedClients", fields: [assignedAgentId], references: [id])
+  preferredUnit Unit?          @relation("ClientPreferredUnit", fields: [preferredUnitId], references: [id])
   deals         Deal[]
   documents     Document[]
   activities    ActivityLog[]

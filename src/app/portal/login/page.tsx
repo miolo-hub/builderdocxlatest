@@ -21,25 +21,31 @@ export default function PortalLoginPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: email.trim(),
-        password: password.trim(),
-      }),
-    });
-    setLoading(false);
-    if (!res.ok) {
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim(),
+          password: password.trim(),
+        }),
+      });
       const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(
+          data.error ??
+            "Login failed. Start the app with npm run dev, then use a demo account below."
+        );
+        return;
+      }
+      router.push("/portal/dashboard");
+    } catch {
       setError(
-        data.error === "Invalid credentials"
-          ? "Invalid email or password. Use a demo account below or run: npm run db:seed-users"
-          : (data.error ?? "Login failed. Check DATABASE_URL and restart the dev server.")
+        "Cannot reach the server. Run npm run dev and open http://localhost:3000/portal/login"
       );
-      return;
+    } finally {
+      setLoading(false);
     }
-    router.push("/portal/dashboard");
   }
 
   function quickLogin(acc: (typeof DEMO_ACCOUNTS)[0]) {

@@ -1,5 +1,5 @@
 import { normalizePhone } from "./bot-sessions";
-import { prisma } from "./prisma";
+import { getPrisma } from "./prisma";
 import { generateId } from "./store";
 import type { Customer } from "./types";
 
@@ -30,7 +30,7 @@ export async function listCustomers(
   query?: string
 ): Promise<Customer[]> {
   const q = query?.trim();
-  const rows = await prisma.customer.findMany({
+  const rows = await getPrisma().customer.findMany({
     where: { builderId },
     orderBy: { name: "asc" },
   });
@@ -54,7 +54,7 @@ export async function getCustomerById(
   id: string,
   builderId?: string
 ): Promise<Customer | null> {
-  const row = await prisma.customer.findFirst({
+  const row = await getPrisma().customer.findFirst({
     where: builderId ? { id, builderId } : { id },
   });
   return row ? mapRow(row) : null;
@@ -65,7 +65,7 @@ export async function findCustomerByPhone(
   builderId?: string
 ): Promise<Customer | null> {
   const normalized = normalizePhone(phone);
-  const rows = await prisma.customer.findMany({
+  const rows = await getPrisma().customer.findMany({
     where: builderId ? { builderId } : undefined,
   });
   const match = rows.find((c) => normalizePhone(c.phone) === normalized);
@@ -90,7 +90,7 @@ export async function createCustomer(
   if (existing) {
     throw new Error("A customer with this phone number already exists");
   }
-  const row = await prisma.customer.create({
+  const row = await getPrisma().customer.create({
     data: {
       id: generateId("cust"),
       builderId: input.builderId,

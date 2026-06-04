@@ -1,4 +1,4 @@
-import { prisma } from "./prisma";
+import { getPrisma } from "./prisma";
 import type { PortalUser, UserRole } from "./types";
 
 function mapRow(row: {
@@ -24,16 +24,13 @@ export async function findPortalUserByEmailPassword(
   password: string
 ): Promise<PortalUser | null> {
   const normalized = email.trim().toLowerCase();
-  const row = await prisma.portalUser.findFirst({
-    where: {
-      email: { equals: normalized, mode: "insensitive" },
-      password,
-    },
+  const row = await getPrisma().portalUser.findFirst({
+    where: { email: normalized, password },
   });
   return row ? mapRow(row) : null;
 }
 
 export async function findPortalUserById(id: string): Promise<PortalUser | null> {
-  const row = await prisma.portalUser.findUnique({ where: { id } });
+  const row = await getPrisma().portalUser.findUnique({ where: { id } });
   return row ? mapRow(row) : null;
 }

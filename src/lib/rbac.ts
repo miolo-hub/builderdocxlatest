@@ -24,6 +24,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 
 type Permission =
   | "projects.manage"
+  | "projects.delete"
   | "units.manage"
   | "clients.manage"
   | "clients.update_stage"
@@ -41,8 +42,10 @@ type Permission =
 const PERMISSIONS: Record<UserRole, Permission[]> = {
   super_admin: [
     "projects.manage",
+    "projects.delete",
     "units.manage",
     "clients.manage",
+    "clients.update_stage",
     "clients.view_all",
     "deals.manage",
     "payments.view",

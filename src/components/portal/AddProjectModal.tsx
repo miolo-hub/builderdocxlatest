@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { PROJECT_STATUSES, PROJECT_STATUS_LABELS, PROJECT_TYPES } from "@/lib/constants";
 
 interface AddProjectModalProps {
@@ -14,10 +14,23 @@ export function AddProjectModal({ open, onClose, onCreated }: AddProjectModalPro
   const [location, setLocation] = useState("");
   const [type, setType] = useState("residential");
   const [status, setStatus] = useState("active");
-  const [totalUnits, setTotalUnits] = useState("");
+  const [available, setAvailable] = useState("");
+  const [reserved, setReserved] = useState("");
+  const [sold, setSold] = useState("");
+  const [blocked, setBlocked] = useState("");
+  const [defaultBasePrice, setDefaultBasePrice] = useState("");
   const [constructionPct, setConstructionPct] = useState("0");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const totalUnits = useMemo(
+    () =>
+      (parseInt(available, 10) || 0) +
+      (parseInt(reserved, 10) || 0) +
+      (parseInt(sold, 10) || 0) +
+      (parseInt(blocked, 10) || 0),
+    [available, reserved, sold, blocked]
+  );
 
   if (!open) return null;
 
@@ -26,13 +39,21 @@ export function AddProjectModal({ open, onClose, onCreated }: AddProjectModalPro
     setLocation("");
     setType("residential");
     setStatus("active");
-    setTotalUnits("");
+    setAvailable("");
+    setReserved("");
+    setSold("");
+    setBlocked("");
+    setDefaultBasePrice("");
     setConstructionPct("0");
     setError("");
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (totalUnits === 0) {
+      setError("Enter at least one unit across the inventory fields.");
+      return;
+    }
     setLoading(true);
     setError("");
     const res = await fetch("/api/projects", {
@@ -43,7 +64,11 @@ export function AddProjectModal({ open, onClose, onCreated }: AddProjectModalPro
         location,
         type,
         status,
-        totalUnits: totalUnits || 0,
+        available,
+        reserved,
+        sold,
+        blocked,
+        defaultBasePrice,
         constructionPct,
       }),
     });
@@ -103,15 +128,67 @@ export function AddProjectModal({ open, onClose, onCreated }: AddProjectModalPro
               </select>
             </label>
           </div>
+
+          <div>
+            <p className="mb-2 text-sm font-medium">Initial inventory *</p>
+            <p className="mb-3 text-xs text-[var(--muted)]">
+              Creates units in the database (e.g. AV-001 available, SL-001 sold). Total:{" "}
+              <strong>{totalUnits}</strong>
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block text-sm">
+                <span className="mb-1 block text-green-800">Available</span>
+                <input
+                  type="number"
+                  min={0}
+                  className="input"
+                  value={available}
+                  onChange={(e) => setAvailable(e.target.value)}
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-yellow-800">Reserved</span>
+                <input
+                  type="number"
+                  min={0}
+                  className="input"
+                  value={reserved}
+                  onChange={(e) => setReserved(e.target.value)}
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-red-800">Sold</span>
+                <input
+                  type="number"
+                  min={0}
+                  className="input"
+                  value={sold}
+                  onChange={(e) => setSold(e.target.value)}
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-slate-700">Blocked</span>
+                <input
+                  type="number"
+                  min={0}
+                  className="input"
+                  value={blocked}
+                  onChange={(e) => setBlocked(e.target.value)}
+                />
+              </label>
+            </div>
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block text-sm">
-              <span className="mb-1 block font-medium">Planned units</span>
+              <span className="mb-1 block font-medium">Default unit price (₹)</span>
               <input
                 type="number"
                 min={0}
                 className="input"
-                value={totalUnits}
-                onChange={(e) => setTotalUnits(e.target.value)}
+                value={defaultBasePrice}
+                onChange={(e) => setDefaultBasePrice(e.target.value)}
+                placeholder="Optional"
               />
             </label>
             <label className="block text-sm">
@@ -126,7 +203,9 @@ export function AddProjectModal({ open, onClose, onCreated }: AddProjectModalPro
               />
             </label>
           </div>
+
           {error && <p className="text-sm text-red-600">{error}</p>}
+
           <div className="flex gap-3 pt-2">
             <button type="submit" className="btn-primary flex-1" disabled={loading}>
               {loading ? "Saving…" : "Add project"}

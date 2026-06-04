@@ -15,6 +15,12 @@ type ProjectRow = {
   status: string;
   constructionPct: number;
   _count: { units: number };
+  unitCounts: {
+    available: number;
+    reserved: number;
+    sold: number;
+    blocked: number;
+  };
 };
 
 export default function ProjectsPage() {
@@ -24,6 +30,7 @@ export default function ProjectsPage() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [showAdd, setShowAdd] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = useCallback(async (q: string, status: string) => {
     const params = new URLSearchParams();
@@ -48,9 +55,23 @@ export default function ProjectsPage() {
     return () => clearTimeout(t);
   }, [query, statusFilter, load]);
 
+  async function deleteProject(id: string, name: string) {
+    if (!confirm(`Delete project "${name}" and all its units? This cannot be undone.`)) return;
+    setDeletingId(id);
+    const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
+    setDeletingId(null);
+    if (!res.ok) {
+      const data = await res.json();
+      alert(data.error ?? "Could not delete project");
+      return;
+    }
+    void load(query, statusFilter);
+  }
+
   if (!user) return null;
 
   const canAdd = can(user.role, "projects.manage");
+  const canDelete = can(user.role, "projects.delete");
 
   return (
     <PropTrackShell user={user}>
@@ -95,18 +116,33 @@ export default function ProjectsPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           {projects.map((p) => (
-            <Link
-              key={p.id}
-              href={`/portal/projects/${p.id}`}
-              className="card block p-5 hover:border-teal-300"
-            >
-              <h2 className="font-semibold">{p.name}</h2>
-              <p className="text-sm text-[var(--muted)]">{p.location || "—"}</p>
-              <p className="mt-2 text-sm">
-                {p._count.units} units · {p.constructionPct}% built ·{" "}
-                {PROJECT_STATUS_LABELS[p.status] ?? p.status}
-              </p>
-            </Link>
+            <div key={p.id} className="card relative p-5">
+              <Link href={`/portal/projects/${p.id}`} className="block hover:border-teal-300">
+                <h2 className="font-semibold pr-16">{p.name}</h2>
+                <p className="text-sm text-[var(--muted)]">{p.location || "—"}</p>
+                <p className="mt-2 text-sm">
+                  <strong>{p._count.units}</strong> units · {p.constructionPct}% built ·{" "}
+                  {PROJECT_STATUS_LABELS[p.status] ?? p.status}
+                </p>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  🟢 {p.unitCounts.available} avail · 🟡 {p.unitCounts.reserved} reserved · 🔴{" "}
+                  {p.unitCounts.sold} sold · ⚫ {p.unitCounts.blocked} blocked
+                </p>
+              </Link>
+              {canDelete && (
+                <button
+                  type="button"
+                  className="absolute right-4 top-4 text-xs text-red-600 hover:underline disabled:opacity-50"
+                  disabled={deletingId === p.id}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    void deleteProject(p.id, p.name);
+                  }}
+                >
+                  {deletingId === p.id ? "Deleting…" : "Delete"}
+                </button>
+              )}
+            </div>
           ))}
         </div>
       )}

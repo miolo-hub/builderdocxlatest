@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { PropTrackShell } from "@/components/portal/PropTrackShell";
@@ -65,11 +66,24 @@ export default function DashboardPage() {
     );
   }
 
+  const isAdmin = user.role === "super_admin";
+
   return (
     <PropTrackShell user={user}>
       <h1 className="mb-6 text-2xl font-bold">Management Dashboard</h1>
 
-      {metrics && (
+      {metrics && isAdmin && (
+        <Link
+          href="/portal/projects"
+          className="card mb-8 block p-8 transition hover:border-teal-400 hover:shadow-md"
+        >
+          <p className="text-sm font-medium text-[var(--muted)]">Projects & inventory</p>
+          <p className="mt-2 text-5xl font-bold text-[var(--brand)]">{metrics.projects}</p>
+          <p className="mt-2 text-sm text-teal-700">View all projects →</p>
+        </Link>
+      )}
+
+      {metrics && !isAdmin && (
         <>
           {metrics.payments.overdueCount > 0 && (
             <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-900">
@@ -95,7 +109,11 @@ export default function DashboardPage() {
           <h2 className="mb-4 font-semibold">Projects</h2>
           <div className="mb-8 grid gap-4 sm:grid-cols-2">
             {metrics.projectCards.map((p) => (
-              <div key={p.id} className="card p-5">
+              <Link
+                key={p.id}
+                href={`/portal/projects/${p.id}`}
+                className="card block p-5 hover:border-teal-300"
+              >
                 <div className="flex justify-between">
                   <h3 className="font-semibold">{p.name}</h3>
                   <span className="badge badge-customer">{p.status}</span>
@@ -109,7 +127,7 @@ export default function DashboardPage() {
                     style={{ width: `${p.constructionPct}%` }}
                   />
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
 

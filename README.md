@@ -11,6 +11,12 @@ A two-sided platform for real estate builders to upload and manage customer docu
 | **C) Architecture diagram** | `/architecture` | ASCII system diagram and component breakdown |
 | **D) Working prototype** | `/` | Shared data store — upload in portal, fetch in simulator |
 
+## Deploy on Vercel
+
+See **[DEPLOYMENT.md](./DEPLOYMENT.md)** — you must copy all env vars into Vercel and run `npm run db:seed-users` once against your Neon database.
+
+Check: `https://your-app.vercel.app/api/health` should return `"ok": true`.
+
 ## Quick start
 
 ```bash

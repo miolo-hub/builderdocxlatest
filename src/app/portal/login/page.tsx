@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const DEMO_ACCOUNTS = [
   { email: "admin@prestige.demo", password: "admin123", role: "Admin" },
@@ -16,6 +16,11 @@ export default function PortalLoginPage() {
   const [password, setPassword] = useState("docs123");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [onVercel, setOnVercel] = useState(false);
+
+  useEffect(() => {
+    setOnVercel(window.location.hostname.includes("vercel.app"));
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -92,6 +97,18 @@ export default function PortalLoginPage() {
             {loading ? "Signing in…" : "Sign in"}
           </button>
         </form>
+
+        {onVercel && (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+            <strong>Vercel deploy:</strong> Add{" "}
+            <code className="rounded bg-amber-100 px-1">DATABASE_URL</code> and R2
+            vars in Vercel → Settings → Environment Variables, then redeploy. Check{" "}
+            <a href="/api/health" className="underline" target="_blank" rel="noreferrer">
+              /api/health
+            </a>
+            .
+          </div>
+        )}
 
         <div className="mt-6 border-t border-[var(--border)] pt-4">
           <p className="mb-2 text-xs font-medium text-[var(--muted)]">Demo accounts</p>

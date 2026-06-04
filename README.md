@@ -1,74 +1,57 @@
-# BuilderDocs
+# PropTrack CRM
 
-A two-sided platform for real estate builders to upload and manage customer documents, with on-demand retrieval via a WhatsApp-style bot (simulator included for prototyping).
+Real estate marketing CRM — inventory, clients, payments, documents, WhatsApp automation, and agent commissions.
 
-## What's included
+Built on the **PRD-recommended stack**:
 
-| Deliverable | Route | Description |
-|-------------|-------|-------------|
-| **A) Builder Admin Portal** | `/portal/login` | Search customers, upload/tag documents, visibility, audit log |
-| **B) WhatsApp Simulator** | `/simulator` | Full customer flow with OTP and PDF delivery |
-| **C) Architecture diagram** | `/architecture` | ASCII system diagram and component breakdown |
-| **D) Working prototype** | `/` | Shared data store — upload in portal, fetch in simulator |
+| Layer | Technology |
+|-------|------------|
+| Frontend | **React** (Next.js 16) + **Tailwind CSS** |
+| Backend | **Node.js** REST API (Next.js Route Handlers) |
+| Database | **PostgreSQL** (Neon) + **Prisma** |
+| Auth | **JWT** (jose) + **bcrypt** + **RBAC** |
+| Files | **Cloudflare R2** (S3-compatible) |
+| WhatsApp | Bot engine (simulator → Meta BSP ready) |
+
+## Modules
+
+- **Projects & inventory** — units, status grid, construction %
+- **Clients** — 360° profile, stages, timeline
+- **Deals & payments** — schedules, record payments, overdue list
+- **Documents** — R2 vault, WhatsApp delivery
+- **Agents & commissions** — per-deal commission records
+- **Dashboard** — revenue, overdue, agent leaderboard
+- **WhatsApp simulator** — OTP, payments, documents, construction updates
 
 ## Quick start
 
 ```bash
 npm install
+cp .env.example .env.local   # fill DATABASE_URL, R2, JWT_SECRET
+npm run db:push
+npm run db:seed-all
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
+Open http://localhost:3000/portal/login
 
-## Demo credentials
+## Demo logins
 
 | Role | Email | Password |
 |------|-------|----------|
-| Admin | admin@prestige.demo | admin123 |
-| Sales | sales@prestige.demo | sales123 |
-| Document Manager | docs@prestige.demo | docs123 |
+| Super Admin | admin@prestige.demo | admin123 |
+| Sales Agent | sales@prestige.demo | sales123 |
+| Accounts | accounts@prestige.demo | accounts123 |
+| Documents | docs@prestige.demo | docs123 |
 
-## WhatsApp simulator
+## Vercel deploy
 
-1. Open `/simulator`
-2. Select **Vikram Patel** (+91 98765 43210)
-3. Send **Hi** → **1** → OTP **482916** → **Sale Agreement**
+See [DEPLOYMENT.md](./DEPLOYMENT.md). Required env: `DATABASE_URL`, `JWT_SECRET`, R2 vars, `SIGNED_URL_SECRET`.
 
-## Features implemented
+Health check: `/api/health`
 
-- Role-based portal login (admin, sales, document manager)
-- Customer search by name, phone, unit, tower
-- Document upload with types: Sale Agreement, Price Breakup, Allotment Letter, Payment Receipt, NOC, Possession Letter
-- Visibility: customer-accessible vs internal-only
-- OTP verification before document access
-- HMAC signed URLs with expiry for downloads
-- Audit trail (uploads, logins, OTP, downloads, notifications)
-- WhatsApp notification trigger on upload (logged in audit)
+## Roadmap (from PRD)
 
-## Storage
-
-| Data | Location |
-|------|----------|
-| **Customers** | **Neon PostgreSQL** (`DATABASE_URL`) |
-| Portal users, documents metadata, audit | `data/store.json` (local JSON) |
-| Document files | **Cloudflare R2** (S3-compatible API) |
-
-Setup database: `npm run db:push` then `npm run db:seed`
-
-Configure R2 in `.env.local` (see `.env.example`). R2 bucket name: **`builder`** (`R2_BUCKET_NAME`). Verify with `npm run test:r2`. Restart the dev server after changing env vars.
-
-Uploaded files are stored as: `documents/{builderId}/{customerId}/{timestamp}-{filename}`
-
-## Production roadmap
-
-- Replace `data/store.json` with PostgreSQL + Prisma
-- WhatsApp: Meta Cloud API or Twilio webhooks → `POST /api/bot/message`
-- SMS/OTP provider for real verification
-- Multi-tenant builders with isolated data
-
-## Tech stack
-
-- Next.js 16 (App Router)
-- TypeScript
-- Tailwind CSS v4
-- File-based JSON store (prototype)
+- Phase 2: Meta WhatsApp BSP webhooks, EOD reports, PDF receipts
+- Phase 3: Broadcast, escalation rules, scheduled reports
+- Phase 4: Visual floor map, accounting integrations

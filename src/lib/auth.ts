@@ -1,30 +1,55 @@
 import { cookies } from "next/headers";
-import { findPortalUserById } from "./users-db";
-import { readStore } from "./store";
-import type { PortalUser } from "./types";
+import { verifyToken, type JwtPayload } from "./jwt";
+import { normalizeRole, type UserRole } from "./rbac";
+import { getPrisma } from "./prisma";
 
-const SESSION_COOKIE = "builderdocs_session";
+const AUTH_COOKIE = "proptrack_token";
 
-export async function getSessionUser(): Promise<PortalUser | null> {
-  const cookieStore = await cookies();
-  const userId = cookieStore.get(SESSION_COOKIE)?.value;
-  if (!userId) return null;
-
-  try {
-    const user = await findPortalUserById(userId);
-    if (user) return user;
-  } catch {
-    /* fallback */
-  }
-
-  const store = readStore();
-  return store.users.find((u) => u.id === userId) ?? null;
+export interface SessionUser {
+  id: string;
+  email: string;
+  name: string;
+  role: UserRole;
+  builderId: string;
+  agentId?: string | null;
 }
 
-export function sessionCookieOptions(userId: string) {
+export async function getSessionUser(): Promise<SessionUser | null> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(AUTH_COOKIE)?.value;
+  if (!token) return null;
+
+  const payload = await verifyToken(token);
+  if (!payload?.sub) return null;
+
+  try {
+    const user = await getPrisma().portalUser.findUnique({
+      where: { id: payload.sub },
+    });
+    if (!user) return null;
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: normalizeRole(user.role),
+      builderId: user.builderId,
+      agentId: user.agentId,
+    };
+  } catch {
+    return {
+      id: payload.sub,
+      email: payload.email,
+      name: payload.name,
+      role: normalizeRole(payload.role),
+      builderId: payload.builderId,
+    };
+  }
+}
+
+export function authCookieOptions(token: string) {
   return {
-    name: SESSION_COOKIE,
-    value: userId,
+    name: AUTH_COOKIE,
+    value: token,
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax" as const,
@@ -33,4 +58,14 @@ export function sessionCookieOptions(userId: string) {
   };
 }
 
-export const SESSION_COOKIE_NAME = SESSION_COOKIE;
+export function clearAuthCookie() {
+  return {
+    name: AUTH_COOKIE,
+    value: "",
+    maxAge: 0,
+    path: "/",
+  };
+}
+
+export const AUTH_COOKIE_NAME = AUTH_COOKIE;
+export type { JwtPayload };

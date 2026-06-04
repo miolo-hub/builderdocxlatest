@@ -9,10 +9,11 @@
     "lint": "eslint",
     "test:r2": "node scripts/test-r2.mjs",
     "db:generate": "prisma generate",
-    "db:push": "prisma db push",
+    "db:push": "prisma db push --accept-data-loss",
+    "db:migrate-auth": "node prisma/migrate-portal-auth.mjs",
     "db:seed": "node prisma/seed-customers.mjs",
     "db:seed-users": "node prisma/seed-portal-users.mjs",
-    "db:seed-all": "node prisma/seed-portal-users.mjs && node prisma/seed-customers.mjs",
+    "db:seed-all": "node prisma/seed-proptrack.mjs",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -20,7 +21,9 @@
     "@aws-sdk/s3-request-presigner": "^3.1061.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "bcryptjs": "^3.0.3",
     "dotenv": "^17.4.2",
+    "jose": "^6.2.3",
     "next": "16.2.7",
     "pg": "^8.21.0",
     "prisma": "^7.8.0",
@@ -29,6 +32,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

@@ -1,11 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface AddCustomerModalProps {
   open: boolean;
   onClose: () => void;
   onCreated: () => void;
+}
+
+interface Project {
+  id: string;
+  name: string;
 }
 
 export function AddCustomerModal({
@@ -18,9 +23,21 @@ export function AddCustomerModal({
   const [email, setEmail] = useState("");
   const [unit, setUnit] = useState("");
   const [tower, setTower] = useState("");
-  const [project, setProject] = useState("");
+  const [projectName, setProjectName] = useState("");
+  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    void fetch("/api/projects")
+      .then((res) => res.json())
+      .then((data) => {
+        const list = (data.projects ?? []) as Project[];
+        setProjects(list);
+        if (list.length === 1) setProjectName(list[0].name);
+      });
+  }, [open]);
 
   if (!open) return null;
 
@@ -30,7 +47,7 @@ export function AddCustomerModal({
     setEmail("");
     setUnit("");
     setTower("");
-    setProject("");
+    setProjectName("");
     setError("");
   }
 
@@ -38,10 +55,17 @@ export function AddCustomerModal({
     e.preventDefault();
     setLoading(true);
     setError("");
-    const res = await fetch("/api/customers", {
+    const res = await fetch("/api/clients", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, phone, email, unit, tower, project }),
+      body: JSON.stringify({
+        name,
+        phone,
+        email,
+        unit,
+        tower,
+        projectName,
+      }),
     });
     setLoading(false);
     const data = await res.json();
@@ -58,7 +82,7 @@ export function AddCustomerModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="card max-h-[90vh] w-full max-w-lg overflow-y-auto p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-[var(--brand)]">Add customer</h2>
+          <h2 className="text-xl font-bold text-[var(--brand)]">Add client</h2>
           <button
             type="button"
             onClick={() => {
@@ -104,42 +128,54 @@ export function AddCustomerModal({
           </label>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block text-sm">
-              <span className="mb-1 block font-medium">Unit / flat *</span>
+              <span className="mb-1 block font-medium">Unit / flat</span>
               <input
                 className="input"
                 placeholder="4B"
                 value={unit}
                 onChange={(e) => setUnit(e.target.value)}
-                required
               />
             </label>
             <label className="block text-sm">
-              <span className="mb-1 block font-medium">Tower / block *</span>
+              <span className="mb-1 block font-medium">Tower / block</span>
               <input
                 className="input"
                 placeholder="Tower 2"
                 value={tower}
                 onChange={(e) => setTower(e.target.value)}
-                required
               />
             </label>
           </div>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium">Project *</span>
-            <input
-              className="input"
-              placeholder="Prestige Lakeside Habitat"
-              value={project}
-              onChange={(e) => setProject(e.target.value)}
-              required
-            />
+            <span className="mb-1 block font-medium">Project</span>
+            {projects.length > 0 ? (
+              <select
+                className="input"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+              >
+                <option value="">Select project</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.name}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                className="input"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                placeholder="No projects yet — enter name"
+              />
+            )}
           </label>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           <div className="flex gap-3 pt-2">
             <button type="submit" className="btn-primary flex-1" disabled={loading}>
-              {loading ? "Saving…" : "Add customer"}
+              {loading ? "Saving…" : "Add client"}
             </button>
             <button type="button" className="btn-secondary" onClick={onClose}>
               Cancel

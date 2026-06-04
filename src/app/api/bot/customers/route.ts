@@ -1,24 +1,25 @@
 import { NextResponse } from "next/server";
-import { listCustomers } from "@/lib/customers-db";
-import { readStore } from "@/lib/store";
+import { getPrisma } from "@/lib/prisma";
 
-/** Public list for WhatsApp simulator — names and phones only. */
 export async function GET() {
-  const store = readStore();
-  const builder = store.builders[0];
-  if (!builder) {
-    return NextResponse.json({ customers: [] });
-  }
   try {
-    const customers = await listCustomers(builder.id);
+    const clients = await getPrisma().client.findMany({
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        unit: true,
+        projectName: true,
+      },
+    });
     return NextResponse.json({
-      customers: customers.map((c) => ({
+      customers: clients.map((c) => ({
         id: c.id,
         name: c.name,
         phone: c.phone,
         unit: c.unit,
-        tower: c.tower,
-        label: `${c.name} (${c.unit})`,
+        label: `${c.name} (${c.unit ?? c.projectName ?? "—"})`,
       })),
     });
   } catch (e) {

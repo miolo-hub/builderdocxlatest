@@ -1,61 +1,61 @@
 import { DOCUMENT_TYPE_LABELS } from "./constants";
-import { readStore } from "./store";
-import type { DocumentRecord, DocumentType } from "./types";
+import { getPrisma } from "./prisma";
+import type { DocumentType } from "./types";
 
-/** Customer-facing docs: newest first, one entry per type (latest upload wins). */
-export function getCustomerAccessibleDocs(customerId: string): DocumentRecord[] {
-  const store = readStore();
-  const sorted = store.documents
-    .filter((d) => d.customerId === customerId && d.visibility === "customer")
-    .sort(
-      (a, b) =>
-        new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
-    );
+export async function getClientAccessibleDocs(clientId: string) {
+  const docs = await getPrisma().document.findMany({
+    where: { clientId, visibility: "customer" },
+    orderBy: { createdAt: "desc" },
+  });
 
-  const latestByType = new Map<DocumentType, DocumentRecord>();
-  for (const doc of sorted) {
-    if (!latestByType.has(doc.type)) {
-      latestByType.set(doc.type, doc);
-    }
+  const latestByType = new Map<string, (typeof docs)[0]>();
+  for (const doc of docs) {
+    if (!latestByType.has(doc.type)) latestByType.set(doc.type, doc);
   }
 
   return Array.from(latestByType.values()).sort((a, b) =>
-    DOCUMENT_TYPE_LABELS[a.type].localeCompare(DOCUMENT_TYPE_LABELS[b.type])
+    (DOCUMENT_TYPE_LABELS[a.type as DocumentType] ?? a.type).localeCompare(
+      DOCUMENT_TYPE_LABELS[b.type as DocumentType] ?? b.type
+    )
   );
 }
 
-export function formatDocListLine(doc: DocumentRecord, index: number): string {
-  const date = new Date(doc.documentDate).toLocaleDateString("en-IN", {
+export function formatDocListLine(
+  doc: { type: string; documentDate: Date },
+  index: number
+): string {
+  const label =
+    DOCUMENT_TYPE_LABELS[doc.type as DocumentType] ?? doc.type;
+  const date = doc.documentDate.toLocaleDateString("en-IN", {
     day: "numeric",
     month: "short",
     year: "numeric",
   });
-  return `${index + 1}. 📄 ${DOCUMENT_TYPE_LABELS[doc.type]} (${date})`;
+  return `${index + 1}. 📄 ${label} (${date})`;
 }
 
-export function matchCustomerDoc(
-  customerId: string,
-  input: string
-): DocumentRecord | null {
-  const docs = getCustomerAccessibleDocs(customerId);
+export async function matchCustomerDoc(clientId: string, input: string) {
+  const docs = await getClientAccessibleDocs(clientId);
   const lower = input.toLowerCase().trim();
-
   const num = parseInt(input, 10);
-  if (!isNaN(num) && num >= 1 && num <= docs.length) {
-    return docs[num - 1];
-  }
+  if (!isNaN(num) && num >= 1 && num <= docs.length) return docs[num - 1];
 
   for (const d of docs) {
-    const label = DOCUMENT_TYPE_LABELS[d.type].toLowerCase();
+    const label = (
+      DOCUMENT_TYPE_LABELS[d.type as DocumentType] ?? d.type
+    ).toLowerCase();
     if (
       lower === label ||
       lower.includes(label) ||
       label.includes(lower) ||
-      d.title.toLowerCase().includes(lower)
+      d.title.toLowerCase().includes(lower) ||
+      lower.includes("agreement") && d.type === "sale_agreement" ||
+      lower.includes("receipt") && d.type === "payment_receipt" ||
+      lower.includes("noc") && d.type === "noc" ||
+      lower.includes("brochure") && d.type === "brochure"
     ) {
       return d;
     }
   }
-
   return null;
 }

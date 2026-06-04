@@ -1,66 +1,63 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { AddCustomerModal } from "@/components/portal/AddCustomerModal";
-import { PortalNav } from "@/components/portal/PortalNav";
+import { PropTrackShell } from "@/components/portal/PropTrackShell";
+import type { UserRole } from "@/lib/rbac";
 
-interface Customer {
-  id: string;
-  name: string;
-  phone: string;
-  unit: string;
-  tower: string;
-  project: string;
+interface Metrics {
+  projects: number;
+  units: { total: number; sold: number; reserved: number; available: number };
+  clients: number;
+  dealsToday: number;
+  revenue: { target: number; collected: number; pending: number };
+  payments: {
+    todayCollections: number;
+    dueThisWeek: number;
+    overdueCount: number;
+    overdueAmount: number;
+  };
+  leaderboard: { name: string; deals: number }[];
+  projectCards: {
+    id: string;
+    name: string;
+    status: string;
+    constructionPct: number;
+    soldPct: number;
+    totalUnits: number;
+    sold: number;
+  }[];
 }
 
-interface User {
-  name: string;
-  role: "admin" | "sales" | "document_manager";
-  builderName?: string;
+function fmt(n: number) {
+  return `₹${(n / 100000).toFixed(1)}L`;
 }
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
-  const [query, setQuery] = useState("");
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showAdd, setShowAdd] = useState(false);
+  const [user, setUser] = useState<{
+    name: string;
+    role: UserRole;
+    builderName?: string;
+  } | null>(null);
+  const [metrics, setMetrics] = useState<Metrics | null>(null);
 
-  const loadUser = useCallback(async () => {
-    const res = await fetch("/api/auth/me");
-    if (!res.ok) {
+  const load = useCallback(async () => {
+    const me = await fetch("/api/auth/me");
+    if (!me.ok) {
       router.push("/portal/login");
-      return null;
+      return;
     }
-    const data = await res.json();
-    setUser(data.user);
-    return data.user;
+    setUser((await me.json()).user);
+    const dash = await fetch("/api/dashboard");
+    if (dash.ok) setMetrics((await dash.json()).metrics);
   }, [router]);
 
-  const search = useCallback(async (q: string) => {
-    const res = await fetch(`/api/customers?q=${encodeURIComponent(q)}`);
-    if (res.ok) {
-      const data = await res.json();
-      setCustomers(data.customers);
-    }
-  }, []);
-
   useEffect(() => {
-    void loadUser().then((u) => {
-      if (u) void search("");
-      setLoading(false);
-    });
-  }, [loadUser, search]);
+    void load();
+  }, [load]);
 
-  useEffect(() => {
-    const t = setTimeout(() => search(query), 200);
-    return () => clearTimeout(t);
-  }, [query, search]);
-
-  if (loading || !user) {
+  if (!user) {
     return (
       <div className="flex min-h-screen items-center justify-center text-[var(--muted)]">
         Loading…
@@ -69,61 +66,66 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--background)]">
-      <PortalNav user={user} />
-      <main className="mx-auto max-w-6xl px-4 py-8">
-        <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold">Customers</h1>
-            <p className="text-[var(--muted)]">
-              Stored in Neon PostgreSQL · search by name, phone, unit, or tower
-            </p>
+    <PropTrackShell user={user}>
+      <h1 className="mb-6 text-2xl font-bold">Management Dashboard</h1>
+
+      {metrics && (
+        <>
+          {metrics.payments.overdueCount > 0 && (
+            <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-900">
+              ⚠️ {metrics.payments.overdueCount} overdue installments —{" "}
+              {fmt(metrics.payments.overdueAmount)} outstanding
+            </div>
+          )}
+
+          <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              { label: "Units sold", value: `${metrics.units.sold}/${metrics.units.total}` },
+              { label: "Available", value: metrics.units.available },
+              { label: "Collected", value: fmt(metrics.revenue.collected) },
+              { label: "Pending", value: fmt(metrics.revenue.pending) },
+            ].map((c) => (
+              <div key={c.label} className="card p-4">
+                <p className="text-sm text-[var(--muted)]">{c.label}</p>
+                <p className="text-2xl font-bold text-[var(--brand)]">{c.value}</p>
+              </div>
+            ))}
           </div>
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={() => setShowAdd(true)}
-          >
-            + Add customer
-          </button>
-        </div>
 
-        <div className="mb-6">
-          <input
-            className="input max-w-xl"
-            placeholder="Search customers…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
+          <h2 className="mb-4 font-semibold">Projects</h2>
+          <div className="mb-8 grid gap-4 sm:grid-cols-2">
+            {metrics.projectCards.map((p) => (
+              <div key={p.id} className="card p-5">
+                <div className="flex justify-between">
+                  <h3 className="font-semibold">{p.name}</h3>
+                  <span className="badge badge-customer">{p.status}</span>
+                </div>
+                <p className="mt-2 text-sm text-[var(--muted)]">
+                  {p.sold}/{p.totalUnits} sold ({p.soldPct}%) · Construction {p.constructionPct}%
+                </p>
+                <div className="mt-3 h-2 rounded-full bg-slate-100">
+                  <div
+                    className="h-2 rounded-full bg-teal-600"
+                    style={{ width: `${p.constructionPct}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
 
-        <AddCustomerModal
-          open={showAdd}
-          onClose={() => setShowAdd(false)}
-          onCreated={() => search(query)}
-        />
-
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {customers.map((c) => (
-            <Link
-              key={c.id}
-              href={`/portal/customers/${c.id}`}
-              className="card block p-5 transition hover:border-teal-300 hover:shadow-md"
-            >
-              <h2 className="font-semibold text-slate-900">{c.name}</h2>
-              <p className="mt-1 text-sm text-[var(--muted)]">{c.phone}</p>
-              <p className="mt-2 text-sm font-medium text-[var(--brand)]">
-                Unit {c.unit} · {c.tower}
-              </p>
-              <p className="text-xs text-[var(--muted)]">{c.project}</p>
-            </Link>
-          ))}
-        </div>
-
-        {customers.length === 0 && (
-          <p className="text-center text-[var(--muted)]">No customers found.</p>
-        )}
-      </main>
-    </div>
+          <h2 className="mb-4 font-semibold">Agent leaderboard</h2>
+          <div className="card divide-y">
+            {metrics.leaderboard.map((a, i) => (
+              <div key={a.name} className="flex justify-between px-4 py-3 text-sm">
+                <span>
+                  {i + 1}. {a.name}
+                </span>
+                <span className="font-medium">{a.deals} deals</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </PropTrackShell>
   );
 }

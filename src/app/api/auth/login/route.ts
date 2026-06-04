@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { sessionCookieOptions } from "@/lib/auth";
-import { isDatabaseConfigured } from "@/lib/prisma";
-import { findPortalUserByEmailPassword } from "@/lib/users-db";
-import { readStore, addAudit } from "@/lib/store";
+import { authCookieOptions } from "@/lib/auth";
+import { authenticateUser } from "@/lib/users-db";
+import { getPrisma } from "@/lib/prisma";
 
 export async function POST(request: Request) {
   try {
@@ -17,56 +16,36 @@ export async function POST(request: Request) {
       );
     }
 
-    let user = null;
-
-    if (isDatabaseConfigured()) {
-      try {
-        user = await findPortalUserByEmailPassword(email, password);
-      } catch (e) {
-        console.error("Neon auth error:", e);
-      }
-    }
-
-    if (!user) {
-      const store = readStore();
-      user =
-        store.users.find(
-          (u) =>
-            u.email.trim().toLowerCase() === email && u.password === password
-        ) ?? null;
-    }
-
-    if (!user) {
+    const result = await authenticateUser(email, password);
+    if (!result) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }
 
-    const store = readStore();
-    const builder = store.builders.find((b) => b.id === user!.builderId);
-    addAudit({
-      builderId: user.builderId,
-      action: "portal.login",
-      actor: user.name,
-      actorType: "portal_user",
-      metadata: { email: user.email, role: user.role },
-    });
+    try {
+      await getPrisma().activityLog.create({
+        data: {
+          id: `act_${Date.now()}`,
+          builderId: result.user.builderId,
+          type: "portal.login",
+          description: `${result.user.name} signed in`,
+          actor: result.user.name,
+        },
+      });
+    } catch {
+      /* non-blocking */
+    }
 
-    const res = NextResponse.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        builderId: user.builderId,
-        builderName: builder?.name,
-      },
-    });
-    res.cookies.set(sessionCookieOptions(user.id));
+    const res = NextResponse.json({ user: result.user });
+    res.cookies.set(authCookieOptions(result.token));
     return res;
   } catch (e) {
-    console.error("Login handler error:", e);
+    console.error("Login error:", e);
     return NextResponse.json(
-      { error: "Server error during login. Restart dev server (npm run dev)." },
-      { status: 500 }
+      {
+        error:
+          "Database unavailable. Set DATABASE_URL on Vercel and run npm run db:seed-all",
+      },
+      { status: 503 }
     );
   }
 }

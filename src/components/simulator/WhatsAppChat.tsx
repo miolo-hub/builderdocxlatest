@@ -14,49 +14,54 @@ interface SimulatorCustomer {
   label: string;
 }
 
-const FALLBACK_CUSTOMERS: SimulatorCustomer[] = [
-  { phone: "+919876543210", label: "Vikram Patel (4B)" },
-  { phone: "+919123456789", label: "Sneha Reddy (12A)" },
-];
-
 export function WhatsAppChat() {
-  const [customers, setCustomers] = useState<SimulatorCustomer[]>(FALLBACK_CUSTOMERS);
-  const [phone, setPhone] = useState(FALLBACK_CUSTOMERS[0].phone);
+  const [customers, setCustomers] = useState<SimulatorCustomer[]>([]);
+  const [phone, setPhone] = useState("");
+  const [builderName, setBuilderName] = useState("");
+  const [demoOtp, setDemoOtp] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sending, setSending] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     void fetch("/api/bot/customers")
       .then((res) => res.json())
       .then((data) => {
-        if (data.customers?.length) {
-          const list = data.customers.map(
-            (c: { phone: string; label: string }) => ({
-              phone: c.phone,
-              label: c.label,
-            })
-          );
-          setCustomers(list);
-          setPhone((current) =>
-            list.some((c: SimulatorCustomer) => c.phone === current)
-              ? current
-              : list[0].phone
-          );
+        if (data.error) {
+          setLoadError(data.error);
+          return;
+        }
+        const list = (data.customers ?? []) as SimulatorCustomer[];
+        setCustomers(list);
+        if (list.length > 0) {
+          setPhone(list[0].phone);
         }
       })
-      .catch(() => {
-        /* keep fallback */
-      });
+      .catch(() => setLoadError("Could not load customers from database"));
   }, []);
+
+  useEffect(() => {
+    if (!phone) return;
+    void fetch(`/api/bot/context?phone=${encodeURIComponent(phone)}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error("context failed");
+        return res.json() as Promise<{ builderName?: string; demoOtp?: string | null }>;
+      })
+      .then((data) => {
+        setBuilderName(data.builderName ?? "");
+        setDemoOtp(data.demoOtp ?? null);
+      })
+      .catch(() => setLoadError("Could not load builder context"));
+  }, [phone]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   async function sendText(text: string) {
-    if (!text.trim() || sending) return;
+    if (!text.trim() || sending || !phone) return;
     setSending(true);
     const res = await fetch("/api/bot/message", {
       method: "POST",
@@ -99,10 +104,17 @@ export function WhatsAppChat() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone, text: "Hi" }),
       });
+      if (!res.ok) {
+        setLoadError("Bot message failed — restart dev server after npm run db:generate");
+        return;
+      }
       const data = await res.json();
-      setMessages(data.messages);
+      setMessages(data.messages ?? []);
     })();
   }, [phone]);
+
+  const quickActions = ["1", "2", "menu", "Sale Agreement"];
+  if (demoOtp) quickActions.splice(1, 0, demoOtp);
 
   return (
     <div className="mx-auto max-w-md overflow-hidden rounded-2xl shadow-xl">
@@ -114,10 +126,21 @@ export function WhatsAppChat() {
           🏢
         </div>
         <div className="flex-1">
-          <p className="font-semibold">Prestige Estates</p>
+          <p className="font-semibold">{builderName || "Loading…"}</p>
           <p className="text-xs opacity-90">Business · Online</p>
         </div>
       </div>
+
+      {loadError && (
+        <p className="bg-amber-50 px-3 py-2 text-xs text-amber-800">{loadError}</p>
+      )}
+
+      {customers.length === 0 && !loadError && (
+        <p className="bg-slate-50 px-3 py-4 text-center text-sm text-[var(--muted)]">
+          No clients in the database. Add clients in the portal or run{" "}
+          <code className="text-xs">npm run db:seed-all</code>.
+        </p>
+      )}
 
       <div
         className="flex flex-col gap-3 px-3 py-4"
@@ -176,11 +199,11 @@ export function WhatsAppChat() {
           placeholder="Type a message"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          disabled={sending}
+          disabled={sending || !phone}
         />
         <button
           type="submit"
-          disabled={sending || !input.trim()}
+          disabled={sending || !input.trim() || !phone}
           className="rounded-full px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
           style={{ background: "var(--whatsapp-header)" }}
         >
@@ -196,6 +219,7 @@ export function WhatsAppChat() {
           className="input text-sm"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
+          disabled={customers.length === 0}
         >
           {customers.map((d) => (
             <option key={d.phone} value={d.phone}>
@@ -204,12 +228,13 @@ export function WhatsAppChat() {
           ))}
         </select>
         <div className="flex flex-wrap gap-2">
-          {["1", "482916", "Sale Agreement", "2", "menu"].map((q) => (
+          {quickActions.map((q) => (
             <button
               key={q}
               type="button"
               onClick={() => sendText(q)}
-              className="rounded-full bg-slate-100 px-2 py-1 text-slate-700 hover:bg-slate-200"
+              disabled={!phone}
+              className="rounded-full bg-slate-100 px-2 py-1 text-slate-700 hover:bg-slate-200 disabled:opacity-50"
             >
               {q}
             </button>
@@ -217,14 +242,21 @@ export function WhatsAppChat() {
           <button
             type="button"
             onClick={resetChat}
-            className="rounded-full bg-red-50 px-2 py-1 text-red-700 hover:bg-red-100"
+            disabled={!phone}
+            className="rounded-full bg-red-50 px-2 py-1 text-red-700 hover:bg-red-100 disabled:opacity-50"
           >
             Reset
           </button>
         </div>
         <p className="text-[var(--muted)]">
-          Demo OTP: <strong>482916</strong> · New customers from the portal appear
-          here automatically after refresh.
+          {demoOtp ? (
+            <>
+              OTP from database: <strong>{demoOtp}</strong>
+            </>
+          ) : (
+            "OTP not set on builder record — configure in database."
+          )}{" "}
+          · Clients load from the portal / database automatically.
         </p>
       </div>
     </div>

@@ -1,17 +1,26 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
-import { readStore } from "@/lib/store";
+import { getPrisma } from "@/lib/prisma";
 
 export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const { searchParams } = new URL(request.url);
-  const limit = parseInt(searchParams.get("limit") ?? "50", 10);
-  const store = readStore();
-  const audit = store.audit
-    .filter((a) => a.builderId === user.builderId)
-    .slice(0, limit);
-  return NextResponse.json({ audit });
+  const limit = parseInt(new URL(request.url).searchParams.get("limit") ?? "50", 10);
+  const activities = await getPrisma().activityLog.findMany({
+    where: { builderId: user.builderId },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+  return NextResponse.json({
+    audit: activities.map((a) => ({
+      id: a.id,
+      builderId: a.builderId,
+      type: a.type,
+      description: a.description,
+      actor: a.actor,
+      createdAt: a.createdAt.toISOString(),
+    })),
+  });
 }

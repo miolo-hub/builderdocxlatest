@@ -7,33 +7,323 @@ datasource db {
   provider = "postgresql"
 }
 
+// ─── Auth & org ───────────────────────────────────────────────
+
+model Builder {
+  id              String   @id
+  name            String
+  slug            String   @unique
+  phone           String?
+  email           String?
+  supportHours    String?  @map("support_hours")
+  whatsappDemoOtp String?  @map("whatsapp_demo_otp")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("builders")
+}
+
 model PortalUser {
-  id        String   @id
-  builderId String   @map("builder_id")
-  email     String   @unique
-  password  String
-  name      String
-  role      String
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id           String   @id
+  builderId    String   @map("builder_id")
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  role         String // super_admin | sales_agent | accounts | document_manager
+  agentId      String?  @map("agent_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  agent Agent? @relation(fields: [agentId], references: [id])
 
   @@index([builderId])
   @@map("portal_users")
 }
 
-model Customer {
-  id        String   @id
-  builderId String   @map("builder_id")
-  name      String
-  phone     String
-  email     String?
-  unit      String
-  tower     String
-  project   String
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+// ─── Projects & inventory ─────────────────────────────────────
+
+model Project {
+  id               String    @id
+  builderId        String    @map("builder_id")
+  name             String
+  type             String // residential | commercial | plots | villas
+  location         String
+  totalUnits       Int       @default(0) @map("total_units")
+  phases           String? // JSON array as string
+  status           String    @default("active") // pre_launch | active | completed | handover
+  launchDate       DateTime? @map("launch_date")
+  basePricePerSqft Float?    @map("base_price_per_sqft")
+  constructionPct  Int       @default(0) @map("construction_pct")
+  possessionDate   DateTime? @map("possession_date")
+  brochurePath     String?   @map("brochure_path")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  units       Unit[]
+  milestones  ConstructionMilestone[]
+
+  @@index([builderId])
+  @@map("projects")
+}
+
+model Unit {
+  id          String    @id
+  projectId   String    @map("project_id")
+  unitNumber  String    @map("unit_number")
+  type        String // apartment | office | plot | villa
+  floor       String?
+  block       String?
+  areaSqft    Float?    @map("area_sqft")
+  facing      String?
+  basePrice   Float     @map("base_price")
+  status      String    @default("available") // available | reserved | sold | blocked | cancelled
+  clientId    String?   @map("client_id")
+  agentId     String?   @map("agent_id")
+  bookingDate DateTime? @map("booking_date")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id])
+  client  Client? @relation(fields: [clientId], references: [id])
+  agent   Agent?  @relation(fields: [agentId], references: [id])
+  deals   Deal[]
+
+  @@unique([projectId, unitNumber])
+  @@index([projectId])
+  @@index([status])
+  @@map("units")
+}
+
+model ConstructionMilestone {
+  id          String   @id
+  projectId   String   @map("project_id")
+  title       String
+  progressPct Int      @map("progress_pct")
+  completedAt DateTime @map("completed_at")
+  photoPath   String?  @map("photo_path")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@index([projectId])
+  @@map("construction_milestones")
+}
+
+// ─── Clients (buyers) ─────────────────────────────────────────
+
+model Client {
+  id              String   @id
+  builderId       String   @map("builder_id")
+  name            String
+  phone           String
+  email           String?
+  unit            String? // legacy display
+  tower           String?
+  projectName     String?  @map("project_name")
+  stage           String   @default("prospect") // prospect | interested | negotiating | booked | active_buyer | completed
+  source          String?
+  address         String?
+  idProofType     String?  @map("id_proof_type")
+  nationality     String?
+  language        String   @default("en")
+  tags            String?
+  assignedAgentId String?  @map("assigned_agent_id")
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  assignedAgent Agent?         @relation("AssignedClients", fields: [assignedAgentId], references: [id])
+  deals         Deal[]
+  documents     Document[]
+  activities    ActivityLog[]
+  whatsappLogs  WhatsAppLog[]
+  units         Unit[]
 
   @@index([builderId])
   @@index([phone])
-  @@map("customers")
+  @@map("clients")
+}
+
+// ─── Deals & payments ─────────────────────────────────────────
+
+model Deal {
+  id              String    @id
+  builderId       String    @map("builder_id")
+  clientId        String    @map("client_id")
+  unitId          String    @map("unit_id")
+  agentId         String?   @map("agent_id")
+  bookingDate     DateTime  @map("booking_date")
+  agreementDate   DateTime? @map("agreement_date")
+  possessionDate  DateTime? @map("possession_date")
+  paymentPlanType String    @map("payment_plan_type") // upfront | milestone | emi | bank_loan
+  totalValue      Float     @map("total_value")
+  discount        Float     @default(0)
+  finalPrice      Float     @map("final_price")
+  paymentStatus   String    @default("on_track") @map("payment_status") // on_track | due_soon | overdue | paid_in_full
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  client           Client                @relation(fields: [clientId], references: [id])
+  unit             Unit                  @relation(fields: [unitId], references: [id])
+  agent            Agent?                @relation(fields: [agentId], references: [id])
+  schedule         PaymentScheduleItem[]
+  transactions     PaymentTransaction[]
+  commission       Commission?
+
+  @@index([clientId])
+  @@index([unitId])
+  @@map("deals")
+}
+
+model PaymentScheduleItem {
+  id                String   @id
+  dealId            String   @map("deal_id")
+  installmentNumber Int      @map("installment_number")
+  dueDate           DateTime @map("due_date")
+  amount            Float
+  milestone         String?
+  status            String   @default("upcoming") // upcoming | due_now | overdue | paid
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  deal         Deal                 @relation(fields: [dealId], references: [id])
+  transactions PaymentTransaction[]
+
+  @@index([dealId])
+  @@index([dueDate])
+  @@map("payment_schedule_items")
+}
+
+model PaymentTransaction {
+  id              String   @id
+  dealId          String   @map("deal_id")
+  scheduleItemId  String?  @map("schedule_item_id")
+  amount          Float
+  mode            String // bank_transfer | cheque | cash
+  reference       String?
+  paidAt          DateTime @map("paid_at")
+  receiptPath     String?  @map("receipt_path")
+  recordedBy      String   @map("recorded_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  deal         Deal                 @relation(fields: [dealId], references: [id])
+  scheduleItem PaymentScheduleItem? @relation(fields: [scheduleItemId], references: [id])
+
+  @@index([dealId])
+  @@map("payment_transactions")
+}
+
+// ─── Agents & commissions ─────────────────────────────────────
+
+model Agent {
+  id             String   @id
+  builderId      String   @map("builder_id")
+  name           String
+  phone          String
+  whatsapp       String?
+  email          String?
+  commissionRate Float    @default(2) @map("commission_rate")
+  employmentType String   @default("full_time") @map("employment_type")
+  joinDate       DateTime @default(now()) @map("join_date")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  portalUsers      PortalUser[]
+  assignedClients  Client[]     @relation("AssignedClients")
+  units            Unit[]
+  deals            Deal[]
+  commissions      Commission[]
+
+  @@index([builderId])
+  @@map("agents")
+}
+
+model Commission {
+  id        String    @id
+  dealId    String    @unique @map("deal_id")
+  agentId   String    @map("agent_id")
+  dealValue Float     @map("deal_value")
+  rate      Float
+  amount    Float
+  trigger   String    @default("on_booking") // on_booking | on_full_payment | on_milestone
+  status    String    @default("pending") // pending | approved | paid
+  payoutDate DateTime? @map("payout_date")
+  tds       Float?
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  deal  Deal  @relation(fields: [dealId], references: [id])
+  agent Agent @relation(fields: [agentId], references: [id])
+
+  @@index([agentId])
+  @@map("commissions")
+}
+
+// ─── Documents ────────────────────────────────────────────────
+
+model Document {
+  id           String   @id
+  builderId    String   @map("builder_id")
+  clientId     String   @map("client_id")
+  dealId       String?  @map("deal_id")
+  type         String
+  title        String
+  fileName     String   @map("file_name")
+  filePath     String   @map("file_path")
+  mimeType     String   @map("mime_type")
+  visibility   String   @default("customer")
+  version      Int      @default(1)
+  documentDate DateTime @map("document_date")
+  uploadedBy   String   @map("uploaded_by")
+  expiresAt    DateTime? @map("expires_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  client Client @relation(fields: [clientId], references: [id])
+
+  @@index([clientId])
+  @@index([builderId])
+  @@map("documents")
+}
+
+// ─── Activity, notifications, WhatsApp ────────────────────────
+
+model ActivityLog {
+  id          String   @id
+  builderId   String   @map("builder_id")
+  clientId    String?  @map("client_id")
+  type        String
+  description String
+  actor       String
+  metadata    String? // JSON
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  client Client? @relation(fields: [clientId], references: [id])
+
+  @@index([clientId])
+  @@map("activity_logs")
+}
+
+model Notification {
+  id        String   @id
+  userId    String   @map("user_id")
+  builderId String   @map("builder_id")
+  type      String
+  title     String
+  body      String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+model WhatsAppLog {
+  id        String   @id
+  clientId  String   @map("client_id")
+  direction String // inbound | outbound
+  message   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  client Client @relation(fields: [clientId], references: [id])
+
+  @@index([clientId])
+  @@map("whatsapp_logs")
 }

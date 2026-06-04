@@ -41,7 +41,7 @@ export default function SimulatorPage() {
                 <li>Customer sends <strong>Hi</strong></li>
                 <li>Bot shows menu: Documents / Payment / Team</li>
                 <li>Customer picks <strong>1</strong> (My Documents)</li>
-                <li>OTP sent to registered mobile — enter <strong>482916</strong></li>
+                <li>OTP sent to registered mobile — use the OTP from your builder record in the database</li>
                 <li>Bot lists customer-accessible documents</li>
                 <li>Customer requests <strong>Sale Agreement</strong> → PDF via signed URL</li>
               </ol>

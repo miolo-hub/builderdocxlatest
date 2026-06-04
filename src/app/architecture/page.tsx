@@ -77,7 +77,7 @@ export default function ArchitecturePage() {
               title: "Customer identity",
               items: [
                 "Phone matched to customer record",
-                "OTP before document list (demo: 482916)",
+                "OTP before document list (stored on builder record)",
                 "Session state per phone in bot engine",
               ],
             },

@@ -2,20 +2,35 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-const DEMO_ACCOUNTS = [
-  { email: "admin@prestige.demo", password: "admin123", role: "Admin" },
-  { email: "sales@prestige.demo", password: "sales123", role: "Sales" },
-  { email: "docs@prestige.demo", password: "docs123", role: "Document Manager" },
-];
+interface DemoAccount {
+  email: string;
+  name: string;
+  role: string;
+}
 
 export default function PortalLoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("docs@prestige.demo");
-  const [password, setPassword] = useState("docs123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [demoAccounts, setDemoAccounts] = useState<DemoAccount[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [onVercel, setOnVercel] = useState(false);
+
+  useEffect(() => {
+    setOnVercel(window.location.hostname.includes("vercel.app"));
+    void fetch("/api/auth/demo-accounts")
+      .then((res) => res.json())
+      .then((data) => {
+        const accounts = (data.accounts ?? []) as DemoAccount[];
+        setDemoAccounts(accounts);
+        if (accounts.length > 0) {
+          setEmail((prev) => prev || accounts[0].email);
+        }
+      });
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -25,94 +40,82 @@ export default function PortalLoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: email.trim(),
-          password: password.trim(),
-        }),
+        body: JSON.stringify({ email: email.trim(), password: password.trim() }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(
-          data.error ??
-            "Login failed. Start the app with npm run dev, then use a demo account below."
-        );
+        setError(data.error ?? "Login failed");
         return;
       }
       router.push("/portal/dashboard");
     } catch {
-      setError(
-        "Cannot reach the server. Run npm run dev and open http://localhost:3000/portal/login"
-      );
+      setError("Cannot reach server. Check deployment or run npm run dev.");
     } finally {
       setLoading(false);
     }
   }
 
-  function quickLogin(acc: (typeof DEMO_ACCOUNTS)[0]) {
-    setEmail(acc.email);
-    setPassword(acc.password);
-  }
-
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-teal-50 to-slate-100 px-4">
-      <Link href="/" className="mb-8 flex items-center gap-2 text-[var(--brand)]">
+      <Link href="/" className="mb-8 flex items-center gap-2">
         <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--brand)] font-bold text-white">
-          BD
+          PT
         </span>
-        <span className="text-xl font-bold">BuilderDocs</span>
+        <span className="text-xl font-bold text-[var(--brand)]">PropTrack CRM</span>
       </Link>
-
       <div className="card w-full max-w-md p-8">
-        <h1 className="mb-1 text-2xl font-bold">Builder Portal</h1>
-        <p className="mb-6 text-sm text-[var(--muted)]">Prestige Estates — sign in</p>
-
+        <h1 className="mb-6 text-2xl font-bold">Sign in</h1>
+        {onVercel && (
+          <p className="mb-4 rounded-lg bg-amber-50 p-3 text-xs text-amber-900">
+            Vercel: set DATABASE_URL + JWT_SECRET in env vars. Check{" "}
+            <a href="/api/health" className="underline" target="_blank" rel="noreferrer">
+              /api/health
+            </a>
+          </p>
+        )}
         <form onSubmit={handleSubmit} className="space-y-4">
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium">Email</span>
-            <input
-              type="email"
-              className="input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium">Password</span>
-            <input
-              type="password"
-              className="input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </label>
+          <input
+            className="input"
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+          <input
+            className="input"
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
           {error && <p className="text-sm text-red-600">{error}</p>}
           <button type="submit" className="btn-primary w-full" disabled={loading}>
             {loading ? "Signing in…" : "Sign in"}
           </button>
         </form>
-
-        <div className="mt-6 border-t border-[var(--border)] pt-4">
-          <p className="mb-2 text-xs font-medium text-[var(--muted)]">Demo accounts</p>
-          <div className="flex flex-wrap gap-2">
-            {DEMO_ACCOUNTS.map((a) => (
-              <button
-                key={a.email}
-                type="button"
-                onClick={() => quickLogin(a)}
-                className="rounded-lg bg-slate-100 px-2 py-1 text-xs hover:bg-slate-200"
-              >
-                {a.role}
-              </button>
-            ))}
+        {demoAccounts.length > 0 && (
+          <div className="mt-6">
+            <p className="mb-2 text-xs text-[var(--muted)]">
+              Portal users from database (passwords from seed / README):
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {demoAccounts.map((a) => (
+                <button
+                  key={a.email}
+                  type="button"
+                  className="rounded-lg bg-slate-100 px-2 py-1 text-xs"
+                  onClick={() => setEmail(a.email)}
+                  title={a.name}
+                >
+                  {a.role}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
-
-      <Link href="/simulator" className="mt-6 text-sm text-teal-700 hover:underline">
-        → Try WhatsApp simulator
-      </Link>
     </div>
   );
 }

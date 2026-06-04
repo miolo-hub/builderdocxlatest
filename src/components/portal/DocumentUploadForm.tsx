@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { DOCUMENT_TYPE_LABELS } from "@/lib/constants";
-import type { DocumentType, DocumentVisibility } from "@/lib/types";
+import type { DocumentVisibility } from "@/lib/types";
 
-const TYPES = Object.entries(DOCUMENT_TYPE_LABELS) as [DocumentType, string][];
+const TYPES = Object.entries(DOCUMENT_TYPE_LABELS);
 
 interface DocumentUploadFormProps {
   customerId: string;
@@ -17,7 +17,7 @@ export function DocumentUploadForm({
   customerName,
   onUploaded,
 }: DocumentUploadFormProps) {
-  const [type, setType] = useState<DocumentType>("sale_agreement");
+  const [type, setType] = useState("sale_agreement");
   const [title, setTitle] = useState("");
   const [visibility, setVisibility] = useState<DocumentVisibility>("customer");
   const [documentDate, setDocumentDate] = useState(
@@ -74,7 +74,7 @@ export function DocumentUploadForm({
           <select
             className="input"
             value={type}
-            onChange={(e) => setType(e.target.value as DocumentType)}
+            onChange={(e) => setType(e.target.value)}
           >
             {TYPES.map(([k, v]) => (
               <option key={k} value={k}>

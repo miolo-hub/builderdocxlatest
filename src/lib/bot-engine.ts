@@ -1,12 +1,13 @@
-import { DOCUMENT_TYPE_LABELS, DEMO_OTP } from "./constants";
+import { DOCUMENT_TYPE_LABELS } from "./constants";
 import {
   formatDocListLine,
-  getCustomerAccessibleDocs,
+  getClientAccessibleDocs,
   matchCustomerDoc,
 } from "./customer-documents";
-import { findCustomerByPhone, getCustomerById } from "./customers-db";
+import { findClientByPhone, getClientById } from "./clients-db";
+import { getBuilderById } from "./builders-db";
 import { getBotSession, setBotSession, normalizePhone } from "./bot-sessions";
-import { readStore, addAudit } from "./store";
+import { getPrisma } from "./prisma";
 import { createSignedUrl } from "./signed-url";
 import type { BotSession } from "./types";
 
@@ -17,20 +18,99 @@ export interface BotMessage {
   timestamp: string;
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-IN", {
+function formatDate(d: Date | string): string {
+  return new Date(d).toLocaleDateString("en-IN", {
     day: "numeric",
     month: "short",
     year: "numeric",
   });
 }
 
+async function logWhatsApp(clientId: string, direction: string, message: string) {
+  try {
+    await getPrisma().whatsAppLog.create({
+      data: {
+        id: `wa_${Date.now()}`,
+        clientId,
+        direction,
+        message: message.slice(0, 2000),
+      },
+    });
+  } catch {
+    /* non-blocking */
+  }
+}
+
+async function resolveClient(phone: string, session: BotSession) {
+  if (session.customerId) {
+    const byId = await getClientById(session.customerId);
+    if (byId) return byId;
+  }
+  return findClientByPhone(phone);
+}
+
+function otpMatches(
+  input: string,
+  session: BotSession,
+  builderOtp: string | null | undefined
+) {
+  return input === session.otp || (!!builderOtp && input === builderOtp);
+}
+
+function formatBuilderContact(builder: {
+  name: string;
+  phone: string | null;
+  email: string | null;
+  supportHours: string | null;
+}) {
+  let msg = `📍 ${builder.name}`;
+  if (builder.phone) msg += `\nPhone: ${builder.phone}`;
+  if (builder.email) msg += `\nEmail: ${builder.email}`;
+  if (builder.supportHours) msg += `\nHours: ${builder.supportHours}`;
+  return msg;
+}
+
+async function paymentSummary(clientId: string): Promise<string> {
+  const deal = await getPrisma().deal.findFirst({
+    where: { clientId },
+    include: { schedule: { orderBy: { dueDate: "asc" } }, unit: { include: { project: true } } },
+  });
+  if (!deal) return "No active deal found. Contact our sales team.";
+  const next = deal.schedule.find((s) => s.status !== "paid");
+  const unitLabel = `${deal.unit.unitNumber} — ${deal.unit.project.name}`;
+  let msg = `💳 *Payment Status* — ${unitLabel}\n\nDeal value: ₹${deal.finalPrice.toLocaleString("en-IN")}\n`;
+  for (const s of deal.schedule) {
+    const icon = s.status === "paid" ? "✅" : s.dueDate < new Date() ? "⚠️" : "⏳";
+    msg += `${icon} #${s.installmentNumber}: ₹${s.amount.toLocaleString("en-IN")} — due ${formatDate(s.dueDate)} (${s.status})\n`;
+  }
+  if (next) {
+    msg += `\n*Next payment:* ₹${next.amount.toLocaleString("en-IN")} on ${formatDate(next.dueDate)}`;
+  }
+  return msg;
+}
+
+async function constructionUpdate(clientId: string): Promise<string> {
+  const deal = await getPrisma().deal.findFirst({
+    where: { clientId },
+    include: { unit: { include: { project: { include: { milestones: { orderBy: { completedAt: "desc" }, take: 1 } } } } } },
+  });
+  const project = deal?.unit?.project;
+  if (!project) return "No project linked to your account.";
+  const m = project.milestones[0];
+  return (
+    `🏗 *${project.name}*\n\n` +
+    `Overall completion: *${project.constructionPct}%*\n` +
+    (m ? `Latest: ${m.title} (${formatDate(m.completedAt)})\n` : "") +
+    (project.possessionDate
+      ? `Expected possession: ${formatDate(project.possessionDate)}`
+      : "")
+  );
+}
+
 export async function processBotMessage(
   phone: string,
   text: string
 ): Promise<{ messages: BotMessage[]; session: BotSession }> {
-  const store = readStore();
-  const builder = store.builders[0];
   const session = getBotSession(phone);
   const replies: BotMessage[] = [];
   const now = new Date().toISOString();
@@ -43,167 +123,188 @@ export async function processBotMessage(
 
   replies.push({ role: "user", text: input, timestamp: now });
 
+  const clientForOtp = await resolveClient(phone, session);
+  const builderForOtp = clientForOtp
+    ? await getBuilderById(clientForOtp.builderId)
+    : null;
+  const demoOtp = builderForOtp?.whatsappDemoOtp ?? null;
+
   if (session.step === "awaiting_otp") {
-    if (input === session.otp || input === DEMO_OTP) {
+    if (otpMatches(input, session, demoOtp)) {
       session.verified = true;
       session.step = "documents_list";
       session.otp = null;
-      session.otpExpiresAt = null;
-      const customer = session.customerId
-        ? await getCustomerById(session.customerId)
+      const client = session.customerId
+        ? await getClientById(session.customerId)
         : null;
-      const docs = getCustomerAccessibleDocs(session.customerId!);
-      addAudit({
-        builderId: builder.id,
-        action: "customer.otp_verified",
-        actor: phone,
-        actorType: "customer",
-        customerId: session.customerId!,
-      });
+      const docs = session.customerId
+        ? await getClientAccessibleDocs(session.customerId)
+        : [];
       push("✅ Verified successfully!");
-      if (customer) {
+      if (client) {
+        await logWhatsApp(client.id, "inbound", input);
+        const unit = client.unit ? `Unit ${client.unit}` : "your property";
         push(
-          `Here are your available documents for Unit ${customer.unit}, ${customer.tower}:\n\n` +
+          `Welcome ${client.name.split(" ")[0]}! Documents for ${unit}:\n\n` +
             docs.map((d, i) => formatDocListLine(d, i)).join("\n") +
-            "\n\nReply with a document name or number to download."
+            "\n\nReply with name or number. Type *menu* for full options."
         );
       }
     } else {
-      push("❌ Invalid OTP. Please try again or type *resend* for a new code.");
+      push("❌ Invalid OTP. Type *resend* for a new code.");
     }
     setBotSession(phone, session);
     return { messages: replies, session };
   }
 
   if (lower === "resend" && session.customerId) {
-    session.otp = DEMO_OTP;
-    session.otpExpiresAt = Date.now() + 5 * 60 * 1000;
-    session.step = "awaiting_otp";
-    push(
-      `We've sent a 6-digit OTP to your registered number.\n\n🔐 Demo OTP: *${DEMO_OTP}*\n\nEnter the OTP to continue.`
-    );
+    if (!demoOtp) {
+      push("OTP is not configured for this builder. Please contact support.");
+    } else {
+      session.otp = demoOtp;
+      session.step = "awaiting_otp";
+      push(`🔐 Your OTP: *${demoOtp}*`);
+    }
     setBotSession(phone, session);
     return { messages: replies, session };
   }
 
   if (session.step === "documents_list" && session.verified && session.customerId) {
-    const doc = matchCustomerDoc(session.customerId, input);
+    const doc = await matchCustomerDoc(session.customerId, input);
     if (doc) {
       const url = createSignedUrl(doc.filePath);
-      addAudit({
-        builderId: builder.id,
-        action: "document.accessed",
-        actor: phone,
-        actorType: "customer",
-        customerId: session.customerId,
-        documentId: doc.id,
-        metadata: { channel: "whatsapp_simulator" },
-      });
+      await logWhatsApp(session.customerId, "outbound", `Sent ${doc.title}`);
       push(
-        `✅ Here is your ${DOCUMENT_TYPE_LABELS[doc.type]} dated ${formatDate(doc.documentDate)}.`,
+        `✅ Here is your ${DOCUMENT_TYPE_LABELS[doc.type] ?? doc.title} dated ${formatDate(doc.documentDate)}.`,
         { name: doc.fileName, url, type: doc.mimeType }
       );
-      push("Need another document? Reply with its name, or type *menu* for options.");
       setBotSession(phone, session);
       return { messages: replies, session };
     }
   }
 
   const isGreeting =
-    /^(hi|hello|hey|start|namaste)/i.test(lower) || session.step === "welcome";
+    /^(hi|hello|hey|start|namaste|help)/i.test(lower) || session.step === "welcome";
 
   if (isGreeting || lower === "menu") {
-    const customer = await findCustomerByPhone(phone, builder.id);
-    session.customerId = customer?.id ?? null;
+    const client = await resolveClient(phone, session);
+    session.customerId = client?.id ?? null;
     session.step = "menu";
-    if (!customer) {
+    const builder = client ? await getBuilderById(client.builderId) : null;
+    const builderName = builder?.name ?? "Builder";
+    if (!client) {
       push(
-        `Welcome to ${builder.name}! 👋\n\nWe couldn't find your number in our records. Please contact our sales team.`
+        `Welcome to ${builderName}! 👋\n\nWe couldn't find your number. Please contact sales.`
       );
     } else {
+      await logWhatsApp(client.id, "inbound", input);
       push(
-        `Welcome to ${builder.name}! 👋\n\nHello ${customer.name.split(" ")[0]}, how can I help you today?\n\n` +
-          `1️⃣ My Documents\n` +
-          `2️⃣ Payment Status\n` +
-          `3️⃣ Talk to our Team\n\n` +
-          `Reply with 1, 2, or 3.`
+        `Welcome to ${builderName}! 👋\n\nHello ${client.name.split(" ")[0]}:\n\n` +
+          `1️⃣ My Payment Schedule\n` +
+          `2️⃣ Request a Document\n` +
+          `3️⃣ Project Construction Update\n` +
+          `4️⃣ Speak to My Sales Agent\n` +
+          `5️⃣ Company Contact\n\n` +
+          `Reply 1–5.`
       );
     }
     setBotSession(phone, session);
     return { messages: replies, session };
   }
 
-  if (lower === "1" || lower.includes("document")) {
-    const customer =
-      (await findCustomerByPhone(phone, builder.id)) ??
-      (session.customerId
-        ? await getCustomerById(session.customerId)
-        : null);
-    if (!customer) {
-      push("Please register your number with us first. Type *hi* to start.");
-      setBotSession(phone, session);
-      return { messages: replies, session };
-    }
-    session.customerId = customer.id;
-    session.verified = false;
-    session.otp = DEMO_OTP;
-    session.otpExpiresAt = Date.now() + 5 * 60 * 1000;
-    session.step = "awaiting_otp";
-    addAudit({
-      builderId: builder.id,
-      action: "customer.otp_sent",
-      actor: phone,
-      actorType: "customer",
-      customerId: customer.id,
-    });
-    push(
-      `🔐 For your security, please verify your identity.\n\nWe've sent a 6-digit OTP to ${customer.phone}.\n\n*Demo OTP:* ${DEMO_OTP}\n\nEnter the OTP to view your documents.`
-    );
-    setBotSession(phone, session);
-    return { messages: replies, session };
-  }
-
-  if (lower === "2" || lower.includes("payment")) {
-    session.step = "payment_status";
-    const customer = await findCustomerByPhone(phone, builder.id);
-    if (customer) {
-      push(
-        `💳 *Payment Status* — Unit ${customer.unit}, ${customer.tower}\n\n` +
-          `• Booking amount: ✅ Received (5 Oct 2024)\n` +
-          `• 1st installment: ✅ Received (15 Jan 2025)\n` +
-          `• 2nd installment: ⏳ Due 15 Jul 2025\n\n` +
-          `For detailed receipts, choose *1️⃣ My Documents* and select Payment Receipt (if shared with you).`
-      );
+  if (lower === "1" || lower.includes("payment")) {
+    const client = await resolveClient(phone, session);
+    if (!client) {
+      push("Please verify your number. Type *hi* to start.");
+    } else if (!session.verified) {
+      session.customerId = client.id;
+      if (!demoOtp) {
+        push("OTP is not configured. Please contact support.");
+      } else {
+        session.otp = demoOtp;
+        session.step = "awaiting_otp";
+        push(`🔐 Enter OTP *${demoOtp}* to view payment details.`);
+      }
     } else {
-      push("Please verify your registered mobile number first. Type *hi* to begin.");
+      push(await paymentSummary(client.id));
     }
     setBotSession(phone, session);
     return { messages: replies, session };
   }
 
-  if (lower === "3" || lower.includes("team") || lower.includes("talk")) {
-    session.step = "team_handoff";
-    push(
-      `📞 Our team will reach out shortly!\n\n` +
-        `Sales: +91 80 2555 0100\n` +
-        `Email: care@prestige.demo\n` +
-        `Hours: Mon–Sat, 9 AM – 6 PM\n\n` +
-        `Your request has been logged. Reference: #${Date.now().toString(36).toUpperCase()}`
-    );
-    addAudit({
-      builderId: builder.id,
-      action: "customer.team_request",
-      actor: phone,
-      actorType: "customer",
-      customerId: session.customerId ?? undefined,
-    });
+  if (lower === "2" || lower.includes("document")) {
+    const client = await resolveClient(phone, session);
+    if (!client) {
+      push("Number not registered. Type *hi*.");
+    } else if (!demoOtp) {
+      push("OTP is not configured. Please contact support.");
+    } else {
+      session.customerId = client.id;
+      session.verified = false;
+      session.otp = demoOtp;
+      session.step = "awaiting_otp";
+      push(`🔐 Enter OTP *${demoOtp}* to access documents.`);
+    }
     setBotSession(phone, session);
     return { messages: replies, session };
   }
 
-  push(
-    `I didn't quite understand that. Type *hi* or *menu* to see options:\n\n1️⃣ My Documents\n2️⃣ Payment Status\n3️⃣ Talk to our Team`
-  );
+  if (lower === "3" || lower.includes("construction") || lower.includes("update")) {
+    const client = await resolveClient(phone, session);
+    if (client && session.verified) {
+      push(await constructionUpdate(client.id));
+    } else if (client && demoOtp) {
+      session.step = "awaiting_otp";
+      session.otp = demoOtp;
+      session.customerId = client.id;
+      push(`🔐 Enter OTP *${demoOtp}* first.`);
+    } else if (client) {
+      push("OTP is not configured. Please contact support.");
+    } else {
+      push("Type *hi* to begin.");
+    }
+    setBotSession(phone, session);
+    return { messages: replies, session };
+  }
+
+  if (lower === "4" || lower.includes("agent")) {
+    const client = await resolveClient(phone, session);
+    const builder = client ? await getBuilderById(client.builderId) : null;
+    if (client?.assignedAgentId) {
+      const agent = await getPrisma().agent.findUnique({
+        where: { id: client.assignedAgentId },
+      });
+      push(
+        agent
+          ? `📞 Your agent: *${agent.name}*\nPhone: ${agent.phone}\nWhatsApp: ${agent.whatsapp ?? agent.phone}`
+          : builder
+            ? `Agent details not available.\n${formatBuilderContact(builder)}`
+            : "Agent details not available."
+      );
+    } else if (builder) {
+      push(formatBuilderContact(builder));
+    } else {
+      push("Please type *hi* to start.");
+    }
+    setBotSession(phone, session);
+    return { messages: replies, session };
+  }
+
+  if (lower === "5" || lower.includes("contact")) {
+    const client = await resolveClient(phone, session);
+    const builder = client
+      ? await getBuilderById(client.builderId)
+      : await getPrisma().builder.findFirst({ orderBy: { name: "asc" } });
+    if (builder) {
+      push(formatBuilderContact(builder));
+    } else {
+      push("Contact information is not available.");
+    }
+    setBotSession(phone, session);
+    return { messages: replies, session };
+  }
+
+  push(`Type *menu* for options (1–5).`);
   setBotSession(phone, session);
   return { messages: replies, session };
 }

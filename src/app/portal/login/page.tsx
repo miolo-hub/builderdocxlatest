@@ -24,11 +24,19 @@ export default function PortalLoginPage() {
     const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({
+        email: email.trim(),
+        password: password.trim(),
+      }),
     });
     setLoading(false);
     if (!res.ok) {
-      setError("Invalid email or password");
+      const data = await res.json().catch(() => ({}));
+      setError(
+        data.error === "Invalid credentials"
+          ? "Invalid email or password. Use a demo account below or run: npm run db:seed-users"
+          : (data.error ?? "Login failed. Check DATABASE_URL and restart the dev server.")
+      );
       return;
     }
     router.push("/portal/dashboard");

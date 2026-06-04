@@ -7,6 +7,20 @@ datasource db {
   provider = "postgresql"
 }
 
+model PortalUser {
+  id        String   @id
+  builderId String   @map("builder_id")
+  email     String   @unique
+  password  String
+  name      String
+  role      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([builderId])
+  @@map("portal_users")
+}
+
 model Customer {
   id        String   @id
   builderId String   @map("builder_id")

@@ -1,17 +1,39 @@
 import { NextResponse } from "next/server";
 import { sessionCookieOptions } from "@/lib/auth";
+import { findPortalUserByEmailPassword } from "@/lib/users-db";
 import { readStore, addAudit } from "@/lib/store";
 
 export async function POST(request: Request) {
-  const { email, password } = await request.json();
-  const store = readStore();
-  const user = store.users.find(
-    (u) => u.email === email && u.password === password
-  );
+  const body = await request.json();
+  const email = String(body.email ?? "").trim().toLowerCase();
+  const password = String(body.password ?? "").trim();
+
+  if (!email || !password) {
+    return NextResponse.json({ error: "Email and password required" }, { status: 400 });
+  }
+
+  let user = null;
+  try {
+    user = await findPortalUserByEmailPassword(email, password);
+  } catch (e) {
+    console.error("Neon auth error:", e);
+  }
+
+  if (!user) {
+    const store = readStore();
+    user =
+      store.users.find(
+        (u) =>
+          u.email.trim().toLowerCase() === email && u.password === password
+      ) ?? null;
+  }
+
   if (!user) {
     return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
   }
-  const builder = store.builders.find((b) => b.id === user.builderId);
+
+  const store = readStore();
+  const builder = store.builders.find((b) => b.id === user!.builderId);
   addAudit({
     builderId: user.builderId,
     action: "portal.login",

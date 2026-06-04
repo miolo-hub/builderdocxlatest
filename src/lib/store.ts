@@ -18,7 +18,12 @@ function ensureDataFile(): void {
 export function readStore(): DataStore {
   ensureDataFile();
   const raw = fs.readFileSync(DATA_FILE, "utf-8");
-  return JSON.parse(raw) as DataStore;
+  const data = JSON.parse(raw) as DataStore;
+  if (!data.users?.length) {
+    data.users = [...INITIAL_DATA.users];
+    writeStore(data);
+  }
+  return data;
 }
 
 export function writeStore(data: DataStore): void {

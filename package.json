@@ -11,6 +11,8 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:seed": "node prisma/seed-customers.mjs",
+    "db:seed-users": "node prisma/seed-portal-users.mjs",
+    "db:seed-all": "node prisma/seed-portal-users.mjs && node prisma/seed-customers.mjs",
     "postinstall": "prisma generate"
   },
   "dependencies": {

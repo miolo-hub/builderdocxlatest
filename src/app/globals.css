@@ -1,8 +1,17 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --brand: #0d4f4f;
+  --brand-light: #14b8a6;
+  --accent: #f59e0b;
+  --card: #ffffff;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --whatsapp: #075e54;
+  --whatsapp-header: #128c7e;
+  --whatsapp-bubble: #dcf8c6;
 }
 
 @theme inline {
@@ -12,15 +21,69 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 6%);
+}
+
+.btn-primary {
+  background: var(--brand);
+  color: white;
+  padding: 0.625rem 1.25rem;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: background 0.15s;
+}
+.btn-primary:hover {
+  background: #0a3d3d;
+}
+
+.btn-secondary {
+  background: white;
+  color: var(--brand);
+  border: 1px solid var(--border);
+  padding: 0.625rem 1.25rem;
+  border-radius: 8px;
+  font-weight: 600;
+}
+.btn-secondary:hover {
+  background: #f1f5f9;
+}
+
+.input {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+}
+.input:focus {
+  outline: 2px solid var(--brand-light);
+  outline-offset: 0;
+  border-color: var(--brand-light);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.badge-customer {
+  background: #d1fae5;
+  color: #065f46;
+}
+.badge-internal {
+  background: #fef3c7;
+  color: #92400e;
 }

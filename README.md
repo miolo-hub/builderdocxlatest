@@ -1,36 +1,74 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# BuilderDocs
 
-## Getting Started
+A two-sided platform for real estate builders to upload and manage customer documents, with on-demand retrieval via a WhatsApp-style bot (simulator included for prototyping).
 
-First, run the development server:
+## What's included
+
+| Deliverable | Route | Description |
+|-------------|-------|-------------|
+| **A) Builder Admin Portal** | `/portal/login` | Search customers, upload/tag documents, visibility, audit log |
+| **B) WhatsApp Simulator** | `/simulator` | Full customer flow with OTP and PDF delivery |
+| **C) Architecture diagram** | `/architecture` | ASCII system diagram and component breakdown |
+| **D) Working prototype** | `/` | Shared data store — upload in portal, fetch in simulator |
+
+## Quick start
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Demo credentials
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Role | Email | Password |
+|------|-------|----------|
+| Admin | admin@prestige.demo | admin123 |
+| Sales | sales@prestige.demo | sales123 |
+| Document Manager | docs@prestige.demo | docs123 |
 
-## Learn More
+## WhatsApp simulator
 
-To learn more about Next.js, take a look at the following resources:
+1. Open `/simulator`
+2. Select **Vikram Patel** (+91 98765 43210)
+3. Send **Hi** → **1** → OTP **482916** → **Sale Agreement**
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Features implemented
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Role-based portal login (admin, sales, document manager)
+- Customer search by name, phone, unit, tower
+- Document upload with types: Sale Agreement, Price Breakup, Allotment Letter, Payment Receipt, NOC, Possession Letter
+- Visibility: customer-accessible vs internal-only
+- OTP verification before document access
+- HMAC signed URLs with expiry for downloads
+- Audit trail (uploads, logins, OTP, downloads, notifications)
+- WhatsApp notification trigger on upload (logged in audit)
 
-## Deploy on Vercel
+## Storage
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Data | Location |
+|------|----------|
+| **Customers** | **Neon PostgreSQL** (`DATABASE_URL`) |
+| Portal users, documents metadata, audit | `data/store.json` (local JSON) |
+| Document files | **Cloudflare R2** (S3-compatible API) |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Setup database: `npm run db:push` then `npm run db:seed`
+
+Configure R2 in `.env.local` (see `.env.example`). R2 bucket name: **`builder`** (`R2_BUCKET_NAME`). Verify with `npm run test:r2`. Restart the dev server after changing env vars.
+
+Uploaded files are stored as: `documents/{builderId}/{customerId}/{timestamp}-{filename}`
+
+## Production roadmap
+
+- Replace `data/store.json` with PostgreSQL + Prisma
+- WhatsApp: Meta Cloud API or Twilio webhooks → `POST /api/bot/message`
+- SMS/OTP provider for real verification
+- Multi-tenant builders with isolated data
+
+## Tech stack
+
+- Next.js 16 (App Router)
+- TypeScript
+- Tailwind CSS v4
+- File-based JSON store (prototype)

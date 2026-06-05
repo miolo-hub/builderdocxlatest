@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AgentSearchSelect, type AgentOption } from "@/components/portal/AgentSearchSelect";
 import { buildMilestoneInstallments } from "@/lib/deal-installments";
 
 interface Project {
@@ -205,22 +206,14 @@ export function BookFlatModal({
             )}
           </label>
 
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium">Sales agent *</span>
-            <select
-              className="input"
-              value={agentId}
-              onChange={(e) => setAgentId(e.target.value)}
-              required
-            >
-              <option value="">Select agent</option>
-              {agents.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <AgentSearchSelect
+            agents={agents as AgentOption[]}
+            value={agentId}
+            onChange={setAgentId}
+            label="Sales agent"
+            placeholder="Search agent name…"
+            required
+          />
 
           <label className="block text-sm">
             <span className="mb-1 block font-medium">Booking date *</span>

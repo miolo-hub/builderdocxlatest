@@ -26,6 +26,7 @@ export default function ClientDetailPage() {
     tower: string | null;
     projectName: string | null;
     assignedAgentId: string | null;
+    assignedAgent?: { name: string } | null;
     linkedUnitId?: string | null;
     workflowStep?: string;
     workflowData?: string | null;
@@ -83,6 +84,11 @@ export default function ClientDetailPage() {
                 {client.unit && <span>{client.unit}</span>}
                 {client.tower && <span> · {client.tower}</span>}
                 {client.projectName && <span> · {client.projectName}</span>}
+              </p>
+            )}
+            {client.assignedAgent && (
+              <p className="mt-1 text-sm text-[var(--muted)]">
+                Agent: <span className="font-medium text-slate-700">{client.assignedAgent.name}</span>
               </p>
             )}
           </div>

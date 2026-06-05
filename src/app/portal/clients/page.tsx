@@ -17,6 +17,7 @@ type ClientRow = {
   stage: string;
   projectName: string | null;
   linkedUnitId?: string | null;
+  assignedAgent?: { name: string } | null;
 };
 
 export default function ClientsPage() {
@@ -122,6 +123,9 @@ export default function ClientsPage() {
               )}
               {c.unit && (
                 <p className="text-xs font-medium text-teal-800">Flat {c.unit}</p>
+              )}
+              {c.assignedAgent && (
+                <p className="mt-1 text-xs text-[var(--muted)]">Agent: {c.assignedAgent.name}</p>
               )}
             </Link>
             <div

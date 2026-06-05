@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import {
-  WORKFLOW_STEPS,
   getActiveWorkflowStep,
   isStepComplete,
+  loanDisbursementsReceived,
   parseWorkflowData,
-  type ClientWorkflowData,
+  workflowStepsForClient,
 } from "@/lib/client-workflow";
 import { TemplateGenerateModal } from "./TemplateGenerateModal";
 
@@ -29,10 +29,19 @@ export function ClientWorkflow({
 }: ClientWorkflowProps) {
   const data = parseWorkflowData(workflowDataRaw);
   const activeStep = getActiveWorkflowStep(workflowStep, data);
+  const steps = workflowStepsForClient(data);
   const [showBreakup, setShowBreakup] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
+  const [loanModal, setLoanModal] = useState<"request" | "record" | null>(null);
+  const [loanAmount, setLoanAmount] = useState("");
+  const [loanBank, setLoanBank] = useState("");
+  const [loanReference, setLoanReference] = useState("");
+  const [loanNotes, setLoanNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const loanReceived = loanDisbursementsReceived(data);
+  const loanPending = (data.loanDisbursements ?? []).filter((d) => d.status === "requested");
 
   async function openDocDownload(documentId: string) {
     const res = await fetch(`/api/documents/${documentId}/download-url`);
@@ -59,15 +68,52 @@ export function ClientWorkflow({
     onUpdated();
   }
 
+  async function submitLoanDisbursement(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+    const res = await fetch(`/api/clients/${clientId}/workflow/loan-disbursement`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: loanModal,
+        amount: loanAmount,
+        bankName: loanBank,
+        reference: loanReference,
+        notes: loanNotes,
+      }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      const json = await res.json();
+      setError(json.error ?? "Failed");
+      return;
+    }
+    setLoanModal(null);
+    setLoanAmount("");
+    setLoanBank("");
+    setLoanReference("");
+    setLoanNotes("");
+    onUpdated();
+  }
+
+  async function markRequestReceived(entryId: string, amount: number) {
+    await workflowAction({
+      action: "mark_disbursement_received",
+      entryId,
+      amount,
+    });
+  }
+
   return (
     <div className="card p-6">
       <h3 className="mb-1 font-semibold text-[var(--brand)]">Client journey</h3>
       <p className="mb-6 text-sm text-[var(--muted)]">
-        Prospect → price breakup → advance → proceed or cancel → loan or direct
+        Prospect → price breakup → advance → proceed/cancel → loan or direct → bank disbursement
       </p>
 
       <ol className="space-y-4">
-        {WORKFLOW_STEPS.map((step) => {
+        {steps.map((step) => {
           const done = isStepComplete(step.id, workflowStep, data);
           const active = activeStep === step.id;
           return (
@@ -79,13 +125,18 @@ export function ClientWorkflow({
             >
               <span
                 className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
-                  done ? "bg-teal-600 text-white" : active ? "bg-teal-100 text-teal-800" : "bg-slate-100 text-slate-500"
+                  done
+                    ? "bg-teal-600 text-white"
+                    : active
+                      ? "bg-teal-100 text-teal-800"
+                      : "bg-slate-100 text-slate-500"
                 }`}
               >
                 {done ? "✓" : step.order}
               </span>
               <div className="min-w-0 flex-1">
                 <p className="font-medium">{step.label}</p>
+
                 {step.id === "prospect" && active && canEdit && (
                   <button
                     type="button"
@@ -95,6 +146,7 @@ export function ClientWorkflow({
                     Generate price breakup letter
                   </button>
                 )}
+
                 {step.id === "price_breakup_done" && (
                   <div className="mt-2 space-y-2 text-sm">
                     {data.priceBreakup?.documentId && (
@@ -117,23 +169,18 @@ export function ClientWorkflow({
                     )}
                   </div>
                 )}
+
                 {step.id === "advance_paid" && data.advance?.documentId && (
                   <button
                     type="button"
                     className="mt-2 text-sm text-teal-700 hover:underline"
                     onClick={() => void openDocDownload(data.advance!.documentId!)}
                   >
-                    Download advance receipt (Rs. {data.advance.amount.toLocaleString("en-IN")})
+                    Download advance receipt (Rs.{" "}
+                    {data.advance.amount.toLocaleString("en-IN")})
                   </button>
                 )}
-                {step.id === "awaiting_decision" &&
-                  data.advance?.documentId &&
-                  !data.decision &&
-                  canEdit && (
-                  <p className="mt-1 text-xs text-[var(--muted)]">
-                    Advance recorded. Choose next step below.
-                  </p>
-                )}
+
                 {step.id === "awaiting_decision" && active && canEdit && !data.decision && (
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
@@ -148,12 +195,15 @@ export function ClientWorkflow({
                       type="button"
                       className="btn-secondary text-sm"
                       disabled={saving}
-                      onClick={() => void workflowAction({ action: "decision", decision: "cancelled" })}
+                      onClick={() =>
+                        void workflowAction({ action: "decision", decision: "cancelled" })
+                      }
                     >
                       Cancelled
                     </button>
                   </div>
                 )}
+
                 {step.id === "closed" && active && canEdit && data.decision === "cancelled" && (
                   <div className="mt-3">
                     <p className="mb-2 text-sm">Advance returned to client?</p>
@@ -181,43 +231,130 @@ export function ClientWorkflow({
                     </div>
                   </div>
                 )}
-                {step.id === "closed" && active && canEdit && data.decision === "proceed" && !data.paymentPath && (
-                  <div className="mt-3">
-                    <p className="mb-2 text-sm">How will the buyer pay?</p>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        className="btn-primary text-sm"
-                        disabled={saving}
-                        onClick={() =>
-                          void workflowAction({ action: "payment_path", paymentPath: "loan" })
-                        }
-                      >
-                        Via bank loan
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-secondary text-sm"
-                        disabled={saving}
-                        onClick={() =>
-                          void workflowAction({ action: "payment_path", paymentPath: "direct" })
-                        }
-                      >
-                        Direct payment
-                      </button>
+
+                {step.id === "closed" &&
+                  active &&
+                  canEdit &&
+                  data.decision === "proceed" &&
+                  !data.paymentPath && (
+                    <div className="mt-3">
+                      <p className="mb-2 text-sm">How will the buyer pay?</p>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          className="btn-primary text-sm"
+                          disabled={saving}
+                          onClick={() =>
+                            void workflowAction({ action: "payment_path", paymentPath: "loan" })
+                          }
+                        >
+                          Via bank loan
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-secondary text-sm"
+                          disabled={saving}
+                          onClick={() =>
+                            void workflowAction({
+                              action: "payment_path",
+                              paymentPath: "direct",
+                            })
+                          }
+                        >
+                          Direct payment
+                        </button>
+                      </div>
                     </div>
+                  )}
+
+                {step.id === "closed" &&
+                  done &&
+                  data.decision === "proceed" &&
+                  data.paymentPath === "direct" && (
+                    <p className="mt-2 text-sm text-teal-800">Proceeding with direct payment</p>
+                  )}
+
+                {step.id === "loan_disbursement" && data.paymentPath === "loan" && (
+                  <div className="mt-3 space-y-3 text-sm">
+                    <p className="text-[var(--muted)]">
+                      Track bank loan requests and amounts received. Recorded disbursements count
+                      toward collected revenue on the dashboard.
+                    </p>
+                    {loanReceived > 0 && (
+                      <p className="font-medium text-green-800">
+                        Total received from bank: Rs. {loanReceived.toLocaleString("en-IN")}
+                      </p>
+                    )}
+                    {(data.loanDisbursements ?? []).length > 0 && (
+                      <ul className="space-y-2 rounded-lg bg-slate-50 p-3">
+                        {(data.loanDisbursements ?? []).map((d) => (
+                          <li key={d.id} className="flex flex-wrap items-center justify-between gap-2">
+                            <span>
+                              {d.status === "requested" ? "⏳ Requested" : "✓ Received"} —{" "}
+                              {d.amount > 0
+                                ? `Rs. ${d.amount.toLocaleString("en-IN")}`
+                                : "Amount TBD"}
+                              {d.bankName ? ` · ${d.bankName}` : ""}
+                            </span>
+                            {d.status === "requested" && canEdit && active && (
+                              <button
+                                type="button"
+                                className="text-xs text-teal-700 hover:underline"
+                                disabled={saving}
+                                onClick={() => {
+                                  const amt = prompt(
+                                    "Amount received from bank (Rs.)",
+                                    d.amount ? String(d.amount) : ""
+                                  );
+                                  if (amt && parseFloat(amt) > 0) {
+                                    void markRequestReceived(d.id, parseFloat(amt));
+                                  }
+                                }}
+                              >
+                                Mark received
+                              </button>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {loanPending.length > 0 && (
+                      <p className="text-xs text-amber-700">
+                        {loanPending.length} disbursement request(s) pending from bank
+                      </p>
+                    )}
+                    {active && canEdit && (
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className="btn-secondary text-sm"
+                          onClick={() => setLoanModal("request")}
+                        >
+                          Request disbursement
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-primary text-sm"
+                          onClick={() => setLoanModal("record")}
+                        >
+                          Record amount received
+                        </button>
+                        {(data.loanDisbursements ?? []).length > 0 && (
+                          <button
+                            type="button"
+                            className="btn-secondary text-sm"
+                            disabled={saving}
+                            onClick={() => void workflowAction({ action: "loan_complete" })}
+                          >
+                            Done tracking loan
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {data.loanTrackingComplete && (
+                      <p className="text-teal-800">Loan tracking completed</p>
+                    )}
                   </div>
-                )}
-                {step.id === "closed" && done && (
-                  <p className="mt-2 text-sm text-teal-800">
-                    {data.decision === "cancelled"
-                      ? data.advanceRefunded
-                        ? "Cancelled — advance refunded"
-                        : "Cancelled — advance not refunded"
-                      : data.paymentPath === "loan"
-                        ? "Proceeding via bank loan"
-                        : "Proceeding with direct payment"}
-                  </p>
                 )}
               </div>
             </li>
@@ -248,6 +385,72 @@ export function ClientWorkflow({
           onUpdated();
         }}
       />
+
+      {loanModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="card w-full max-w-md p-6">
+            <h2 className="mb-4 text-lg font-bold">
+              {loanModal === "request"
+                ? "Request bank disbursement"
+                : "Record disbursement received"}
+            </h2>
+            <form onSubmit={submitLoanDisbursement} className="space-y-3">
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium">
+                  {loanModal === "request" ? "Expected amount (Rs.)" : "Amount received (Rs.) *"}
+                </span>
+                <input
+                  className="input"
+                  type="number"
+                  min="0"
+                  required={loanModal === "record"}
+                  value={loanAmount}
+                  onChange={(e) => setLoanAmount(e.target.value)}
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium">Bank / lender</span>
+                <input
+                  className="input"
+                  value={loanBank}
+                  onChange={(e) => setLoanBank(e.target.value)}
+                  placeholder="e.g. HDFC, SBI"
+                />
+              </label>
+              {loanModal === "record" && (
+                <label className="block text-sm">
+                  <span className="mb-1 block font-medium">Reference / UTR</span>
+                  <input
+                    className="input"
+                    value={loanReference}
+                    onChange={(e) => setLoanReference(e.target.value)}
+                  />
+                </label>
+              )}
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium">Notes</span>
+                <input
+                  className="input"
+                  value={loanNotes}
+                  onChange={(e) => setLoanNotes(e.target.value)}
+                />
+              </label>
+              <div className="flex gap-3 pt-2">
+                <button type="submit" className="btn-primary flex-1" disabled={saving}>
+                  {saving ? "Saving…" : loanModal === "request" ? "Submit request" : "Save & count in revenue"}
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setLoanModal(null)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -82,8 +82,58 @@ export async function PATCH(
         return NextResponse.json({ error: "Invalid payment path" }, { status: 400 });
       }
       data.paymentPath = path;
-      workflowStep = "closed";
+      if (path === "loan") {
+        workflowStep = "loan_disbursement";
+        data.loanDisbursements = data.loanDisbursements ?? [];
+      } else {
+        workflowStep = "closed";
+      }
       stageUpdate = path === "loan" ? "negotiating" : "interested";
+      break;
+    }
+    case "loan_complete": {
+      if (data.paymentPath !== "loan") {
+        return NextResponse.json({ error: "Not on loan path" }, { status: 400 });
+      }
+      data.loanTrackingComplete = true;
+      workflowStep = "closed";
+      break;
+    }
+    case "mark_disbursement_received": {
+      const entryId = String(body.entryId ?? "");
+      const entry = data.loanDisbursements?.find((e) => e.id === entryId);
+      if (!entry || entry.status !== "requested") {
+        return NextResponse.json({ error: "Pending request not found" }, { status: 404 });
+      }
+      const recvAmount = parseFloat(String(body.amount ?? entry.amount));
+      if (Number.isNaN(recvAmount) || recvAmount <= 0) {
+        return NextResponse.json({ error: "Valid amount required" }, { status: 400 });
+      }
+      entry.status = "received";
+      entry.amount = recvAmount;
+      entry.receivedAt = body.receivedAt
+        ? new Date(body.receivedAt).toISOString()
+        : new Date().toISOString();
+      if (body.reference) entry.reference = String(body.reference);
+
+      const deal = await getPrisma().deal.findFirst({
+        where: { clientId: id, builderId: user!.builderId },
+        orderBy: { bookingDate: "desc" },
+      });
+      if (deal && !entry.transactionId) {
+        const txn = await getPrisma().paymentTransaction.create({
+          data: {
+            id: generateId("txn"),
+            dealId: deal.id,
+            amount: recvAmount,
+            mode: "bank_loan",
+            reference: entry.reference ?? entry.bankName ?? "Loan disbursement",
+            paidAt: new Date(entry.receivedAt),
+            recordedBy: user!.name,
+          },
+        });
+        entry.transactionId = txn.id;
+      }
       break;
     }
     default:

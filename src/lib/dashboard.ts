@@ -99,6 +99,13 @@ function computeProjectRevenue(
       if (paidOnDeals >= adv) continue;
     }
     bookingAdvance += adv;
+
+    const wf = parseWorkflowData(c.workflowData);
+    for (const ld of wf.loanDisbursements ?? []) {
+      if (ld.status === "received" && !ld.transactionId) {
+        bankLoan += ld.amount;
+      }
+    }
   }
 
   const collected = directPayments + bankLoan + bookingAdvance;

@@ -3,10 +3,10 @@ export const WORKFLOW_STEPS = [
   { id: "price_breakup_done", label: "Price breakup letter", order: 2 },
   { id: "advance_paid", label: "Paid advance", order: 3 },
   { id: "awaiting_decision", label: "Proceed or cancel", order: 4 },
-  { id: "payment_path", label: "Loan or direct payment", order: 5 },
-  { id: "loan_disbursement", label: "Bank loan disbursement", order: 6 },
-  { id: "closed", label: "Complete", order: 7 },
-  { id: "welcome_kit", label: "Welcome email & brochure", order: 8 },
+  { id: "welcome_kit", label: "Welcome email & brochure", order: 5 },
+  { id: "payment_path", label: "Loan or direct payment", order: 6 },
+  { id: "loan_disbursement", label: "Bank loan disbursement", order: 7 },
+  { id: "closed", label: "Complete", order: 8 },
 ] as const;
 
 export type WorkflowStepId = (typeof WORKFLOW_STEPS)[number]["id"];
@@ -41,6 +41,8 @@ export type ClientWorkflowData = {
   decision?: "proceed" | "cancelled";
   advanceRefunded?: boolean | null;
   paymentPath?: "loan" | "direct";
+  /** Total bank loan amount to be disbursed (balance after advance). */
+  loanExpectedAmount?: number;
   loanDisbursements?: LoanDisbursementEntry[];
   loanTrackingComplete?: boolean;
   welcomeEmail?: {
@@ -80,6 +82,58 @@ export function loanDisbursementsReceived(data: ClientWorkflowData): number {
     .reduce((s, d) => s + d.amount, 0);
 }
 
+function totalFromPriceBreakup(
+  pb: Record<string, string | number> | undefined
+): number {
+  if (!pb) return 0;
+  for (const key of ["totalAmount", "totalFlatCost", "netBasicCost", "baseCost"]) {
+    const v = parseFloat(String(pb[key] ?? "").replace(/,/g, ""));
+    if (!Number.isNaN(v) && v >= 10_000) return v;
+  }
+  return 0;
+}
+
+/** Suggested loan = flat total from price breakup minus advance paid. */
+export function suggestedLoanAmount(data: ClientWorkflowData): number {
+  const total = totalFromPriceBreakup(data.priceBreakup);
+  const advance = data.advance?.amount ?? 0;
+  if (total > advance) return total - advance;
+  if (total > 0) return total;
+  return 0;
+}
+
+export type LoanDisbursementProgress = {
+  expected: number;
+  received: number;
+  percent: number;
+  remaining: number;
+  isComplete: boolean;
+};
+
+export function loanDisbursementProgress(
+  data: ClientWorkflowData
+): LoanDisbursementProgress | null {
+  const expected = data.loanExpectedAmount ?? 0;
+  if (expected <= 0) return null;
+  const received = loanDisbursementsReceived(data);
+  const percent = Math.min(100, Math.round((received / expected) * 1000) / 10);
+  const remaining = Math.max(0, expected - received);
+  const isComplete = received >= expected - 1;
+  return { expected, received, percent, remaining, isComplete };
+}
+
+export function isLoanFullyDisbursed(data: ClientWorkflowData): boolean {
+  return loanDisbursementProgress(data)?.isComplete ?? false;
+}
+
+export function disbursementEntryPercent(
+  amount: number,
+  expected: number
+): number | null {
+  if (expected <= 0 || amount <= 0) return null;
+  return Math.round((amount / expected) * 1000) / 10;
+}
+
 export function workflowStepLabel(
   step: (typeof WORKFLOW_STEPS)[number],
   data: ClientWorkflowData
@@ -113,10 +167,7 @@ export function workflowStepsForClient(data: ClientWorkflowData) {
   }
   if (!data.paymentPath) {
     return WORKFLOW_STEPS.filter(
-      (s) =>
-        s.id !== "loan_disbursement" &&
-        s.id !== "closed" &&
-        s.id !== "welcome_kit"
+      (s) => s.id !== "loan_disbursement" && s.id !== "closed"
     );
   }
   return WORKFLOW_STEPS;
@@ -156,8 +207,7 @@ export function isStepComplete(
 
 export function getActiveWorkflowStep(
   workflowStep: string,
-  data: ClientWorkflowData,
-  opts?: { clientStage?: string; hasDeal?: boolean }
+  data: ClientWorkflowData
 ): string {
   if (!data.priceBreakup?.documentId) return "prospect";
   if (!data.advance?.documentId) return "price_breakup_done";
@@ -167,11 +217,5 @@ export function getActiveWorkflowStep(
   if (data.paymentPath === "loan" && !data.loanTrackingComplete) {
     return "loan_disbursement";
   }
-  const canWelcome =
-    data.decision === "proceed" &&
-    !data.welcomeEmail?.sentAt &&
-    opts &&
-    canSendWelcomeKit(opts.clientStage ?? "", !!opts.hasDeal);
-  if (canWelcome) return "welcome_kit";
   return "closed";
 }

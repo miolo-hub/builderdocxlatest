@@ -3,10 +3,14 @@
 import { useState } from "react";
 import {
   canSendWelcomeKit,
+  disbursementEntryPercent,
   getActiveWorkflowStep,
+  isLoanFullyDisbursed,
   isStepComplete,
+  loanDisbursementProgress,
   loanDisbursementsReceived,
   parseWorkflowData,
+  suggestedLoanAmount,
   workflowStepLabel,
   workflowStepsForClient,
 } from "@/lib/client-workflow";
@@ -36,15 +40,13 @@ export function ClientWorkflow({
   onUpdated,
 }: ClientWorkflowProps) {
   const data = parseWorkflowData(workflowDataRaw);
-  const activeStep = getActiveWorkflowStep(workflowStep, data, {
-    clientStage,
-    hasDeal,
-  });
+  const activeStep = getActiveWorkflowStep(workflowStep, data);
   const welcomeUnlocked = canSendWelcomeKit(clientStage, hasDeal);
   const steps = workflowStepsForClient(data);
   const [showBreakup, setShowBreakup] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
-  const [loanModal, setLoanModal] = useState<"request" | "record" | null>(null);
+  const [loanModal, setLoanModal] = useState<"setup" | "request" | "record" | null>(null);
+  const [loanExpectedInput, setLoanExpectedInput] = useState("");
   const [loanAmount, setLoanAmount] = useState("");
   const [loanBank, setLoanBank] = useState("");
   const [loanReference, setLoanReference] = useState("");
@@ -54,6 +56,14 @@ export function ClientWorkflow({
 
   const loanReceived = loanDisbursementsReceived(data);
   const loanPending = (data.loanDisbursements ?? []).filter((d) => d.status === "requested");
+  const loanProgress = loanDisbursementProgress(data);
+  const loanFullyDisbursed = isLoanFullyDisbursed(data);
+
+  function openLoanSetup(prefill?: number) {
+    const suggested = prefill ?? data.loanExpectedAmount ?? suggestedLoanAmount(data);
+    setLoanExpectedInput(suggested > 0 ? String(Math.round(suggested)) : "");
+    setLoanModal("setup");
+  }
 
   async function openDocDownload(documentId: string) {
     const res = await fetch(`/api/documents/${documentId}/download-url`);
@@ -77,6 +87,36 @@ export function ClientWorkflow({
       setError(json.error ?? "Failed");
       return;
     }
+    onUpdated();
+  }
+
+  async function submitLoanSetup(e: React.FormEvent) {
+    e.preventDefault();
+    const amt = parseFloat(loanExpectedInput);
+    if (Number.isNaN(amt) || amt <= 0) {
+      setError("Enter a valid loan amount");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    const action = data.paymentPath === "loan" ? "set_loan_amount" : "payment_path";
+    const res = await fetch(`/api/clients/${clientId}/workflow`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        action === "payment_path"
+          ? { action, paymentPath: "loan", loanExpectedAmount: amt }
+          : { action, loanExpectedAmount: amt }
+      ),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      const json = await res.json();
+      setError(json.error ?? "Failed");
+      return;
+    }
+    setLoanModal(null);
+    setLoanExpectedInput("");
     onUpdated();
   }
 
@@ -138,8 +178,8 @@ export function ClientWorkflow({
     <div className="card p-6">
       <h3 className="mb-1 font-semibold text-[var(--brand)]">Client journey</h3>
       <p className="mb-6 text-sm text-[var(--muted)]">
-        Prospect → price breakup → advance → proceed/cancel → loan or direct → bank disbursement →
-        welcome email
+        Prospect → price breakup → advance → proceed/cancel → welcome email → loan or direct → bank
+        disbursement
       </p>
 
       <ol className="space-y-4">
@@ -252,9 +292,7 @@ export function ClientWorkflow({
                           type="button"
                           className="btn-primary text-sm"
                           disabled={saving}
-                          onClick={() =>
-                            void workflowAction({ action: "payment_path", paymentPath: "loan" })
-                          }
+                          onClick={() => openLoanSetup()}
                         >
                           Via bank loan
                         </button>
@@ -281,7 +319,7 @@ export function ClientWorkflow({
                   data.paymentPath && (
                     <p className="mt-2 text-sm text-teal-800">
                       {data.paymentPath === "loan"
-                        ? "Proceeding via bank loan"
+                        ? `Proceeding via bank loan${data.loanExpectedAmount ? ` (Rs. ${data.loanExpectedAmount.toLocaleString("en-IN")} to disburse)` : ""}`
                         : "Proceeding with direct payment"}
                     </p>
                   )}
@@ -331,23 +369,82 @@ export function ClientWorkflow({
                 {step.id === "loan_disbursement" && data.paymentPath === "loan" && (
                   <div className="mt-3 space-y-3 text-sm">
                     <p className="text-[var(--muted)]">
-                      Track bank loan requests and amounts received. Recorded disbursements count
-                      toward collected revenue on the dashboard.
+                      Enter the total loan amount once, then record each bank disbursement. Progress
+                      is tracked automatically until 100% is received.
                     </p>
-                    {loanReceived > 0 && (
-                      <p className="font-medium text-green-800">
-                        Total received from bank: Rs. {loanReceived.toLocaleString("en-IN")}
-                      </p>
+
+                    {!data.loanExpectedAmount ? (
+                      active &&
+                      canEdit && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                          <p className="mb-2 text-amber-900">
+                            Set total bank loan amount to start tracking disbursements.
+                          </p>
+                          <button
+                            type="button"
+                            className="btn-primary text-sm"
+                            onClick={() => openLoanSetup()}
+                          >
+                            Set loan amount
+                          </button>
+                        </div>
+                      )
+                    ) : (
+                      <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3">
+                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-medium">
+                            Loan disbursed: {loanProgress?.percent ?? 0}%
+                          </span>
+                          {canEdit && active && (
+                            <button
+                              type="button"
+                              className="text-xs text-teal-700 hover:underline"
+                              onClick={() => openLoanSetup(data.loanExpectedAmount)}
+                            >
+                              Edit loan amount
+                            </button>
+                          )}
+                        </div>
+                        <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              loanFullyDisbursed ? "bg-teal-600" : "bg-teal-500"
+                            }`}
+                            style={{ width: `${loanProgress?.percent ?? 0}%` }}
+                          />
+                        </div>
+                        <p className="mt-2 text-[var(--muted)]">
+                          Rs. {loanReceived.toLocaleString("en-IN")} received of Rs.{" "}
+                          {data.loanExpectedAmount.toLocaleString("en-IN")}
+                          {loanProgress && loanProgress.remaining > 0 && !loanFullyDisbursed && (
+                            <span> · Rs. {loanProgress.remaining.toLocaleString("en-IN")} remaining</span>
+                          )}
+                        </p>
+                        {loanFullyDisbursed && (
+                          <p className="mt-1 font-medium text-teal-800">
+                            100% disbursed — you can move to the next step
+                          </p>
+                        )}
+                      </div>
                     )}
+
                     {(data.loanDisbursements ?? []).length > 0 && (
                       <ul className="space-y-2 rounded-lg bg-slate-50 p-3">
-                        {(data.loanDisbursements ?? []).map((d) => (
+                        {(data.loanDisbursements ?? []).map((d) => {
+                          const entryPct = disbursementEntryPercent(
+                            d.amount,
+                            data.loanExpectedAmount ?? 0
+                          );
+                          return (
                           <li key={d.id} className="flex flex-wrap items-center justify-between gap-2">
                             <span>
                               {d.status === "requested" ? "⏳ Requested" : "✓ Received"} —{" "}
                               {d.amount > 0
                                 ? `Rs. ${d.amount.toLocaleString("en-IN")}`
                                 : "Amount TBD"}
+                              {entryPct != null && (
+                                <span className="text-[var(--muted)]"> ({entryPct}% of loan)</span>
+                              )}
                               {d.bankName ? ` · ${d.bankName}` : ""}
                             </span>
                             {d.status === "requested" && canEdit && active && (
@@ -369,7 +466,8 @@ export function ClientWorkflow({
                               </button>
                             )}
                           </li>
-                        ))}
+                          );
+                        })}
                       </ul>
                     )}
                     {loanPending.length > 0 && (
@@ -377,7 +475,7 @@ export function ClientWorkflow({
                         {loanPending.length} disbursement request(s) pending from bank
                       </p>
                     )}
-                    {active && canEdit && (
+                    {active && canEdit && !!data.loanExpectedAmount && (
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
@@ -393,18 +491,27 @@ export function ClientWorkflow({
                         >
                           Record amount received
                         </button>
-                        {(data.loanDisbursements ?? []).length > 0 && (
+                        {loanFullyDisbursed && (
                           <button
                             type="button"
                             className="btn-secondary text-sm"
                             disabled={saving}
                             onClick={() => void workflowAction({ action: "loan_complete" })}
                           >
-                            Done tracking loan
+                            Complete &amp; move to next step
                           </button>
                         )}
                       </div>
                     )}
+                    {active &&
+                      canEdit &&
+                      data.loanExpectedAmount &&
+                      !loanFullyDisbursed &&
+                      (data.loanDisbursements ?? []).length > 0 && (
+                        <p className="text-xs text-amber-700">
+                          Record disbursements until 100% is received to continue the journey.
+                        </p>
+                      )}
                     {data.loanTrackingComplete && (
                       <p className="text-teal-800">Loan tracking completed</p>
                     )}
@@ -478,7 +585,45 @@ export function ClientWorkflow({
         }}
       />
 
-      {loanModal && (
+      {loanModal === "setup" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="card w-full max-w-md p-6">
+            <h2 className="mb-1 text-lg font-bold">Total bank loan amount</h2>
+            <p className="mb-4 text-sm text-[var(--muted)]">
+              {suggestedLoanAmount(data) > 0
+                ? `Suggested from price breakup minus advance: Rs. ${suggestedLoanAmount(data).toLocaleString("en-IN")}`
+                : "Enter the total amount the bank will disburse for this flat."}
+            </p>
+            <form onSubmit={submitLoanSetup} className="space-y-3">
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium">Loan amount to disburse (Rs.) *</span>
+                <input
+                  className="input"
+                  type="number"
+                  min="1"
+                  required
+                  value={loanExpectedInput}
+                  onChange={(e) => setLoanExpectedInput(e.target.value)}
+                />
+              </label>
+              <div className="flex gap-3 pt-2">
+                <button type="submit" className="btn-primary flex-1" disabled={saving}>
+                  {saving ? "Saving…" : data.paymentPath === "loan" ? "Update amount" : "Continue with bank loan"}
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setLoanModal(null)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {loanModal && loanModal !== "setup" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="card w-full max-w-md p-6">
             <h2 className="mb-4 text-lg font-bold">
@@ -499,6 +644,18 @@ export function ClientWorkflow({
                   value={loanAmount}
                   onChange={(e) => setLoanAmount(e.target.value)}
                 />
+                {loanModal === "record" &&
+                  data.loanExpectedAmount &&
+                  loanAmount &&
+                  parseFloat(loanAmount) > 0 && (
+                    <span className="mt-1 block text-xs text-[var(--muted)]">
+                      {disbursementEntryPercent(parseFloat(loanAmount), data.loanExpectedAmount)}% of
+                      total loan
+                      {loanProgress
+                        ? ` · will reach ${Math.min(100, Math.round(((loanProgress.received + parseFloat(loanAmount)) / data.loanExpectedAmount) * 1000) / 10)}% overall`
+                        : ""}
+                    </span>
+                  )}
               </label>
               <label className="block text-sm">
                 <span className="mb-1 block font-medium">Bank / lender</span>

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/api-auth";
 import {
   getActiveWorkflowStep,
+  isLoanFullyDisbursed,
+  loanDisbursementProgress,
   parseWorkflowData,
   type ClientWorkflowData,
 } from "@/lib/client-workflow";
@@ -83,6 +85,14 @@ export async function PATCH(
       }
       data.paymentPath = path;
       if (path === "loan") {
+        const loanAmt = parseFloat(String(body.loanExpectedAmount ?? "0"));
+        if (Number.isNaN(loanAmt) || loanAmt <= 0) {
+          return NextResponse.json(
+            { error: "Enter total bank loan amount to disburse" },
+            { status: 400 }
+          );
+        }
+        data.loanExpectedAmount = loanAmt;
         workflowStep = "loan_disbursement";
         data.loanDisbursements = data.loanDisbursements ?? [];
       } else {
@@ -91,9 +101,39 @@ export async function PATCH(
       stageUpdate = path === "loan" ? "negotiating" : "interested";
       break;
     }
+    case "set_loan_amount": {
+      if (data.paymentPath !== "loan") {
+        return NextResponse.json({ error: "Not on loan path" }, { status: 400 });
+      }
+      const loanAmt = parseFloat(String(body.loanExpectedAmount ?? "0"));
+      if (Number.isNaN(loanAmt) || loanAmt <= 0) {
+        return NextResponse.json({ error: "Valid loan amount required" }, { status: 400 });
+      }
+      data.loanExpectedAmount = loanAmt;
+      if (data.loanTrackingComplete && !isLoanFullyDisbursed(data)) {
+        data.loanTrackingComplete = false;
+        workflowStep = "loan_disbursement";
+      }
+      break;
+    }
     case "loan_complete": {
       if (data.paymentPath !== "loan") {
         return NextResponse.json({ error: "Not on loan path" }, { status: 400 });
+      }
+      const progress = loanDisbursementProgress(data);
+      if (!progress) {
+        return NextResponse.json(
+          { error: "Set total bank loan amount before completing" },
+          { status: 400 }
+        );
+      }
+      if (!progress.isComplete) {
+        return NextResponse.json(
+          {
+            error: `Loan is ${progress.percent}% disbursed. Record disbursements until 100% (Rs. ${progress.remaining.toLocaleString("en-IN")} remaining).`,
+          },
+          { status: 400 }
+        );
       }
       data.loanTrackingComplete = true;
       workflowStep = "closed";
@@ -133,6 +173,10 @@ export async function PATCH(
           },
         });
         entry.transactionId = txn.id;
+      }
+      if (isLoanFullyDisbursed(data)) {
+        data.loanTrackingComplete = true;
+        workflowStep = "closed";
       }
       break;
     }

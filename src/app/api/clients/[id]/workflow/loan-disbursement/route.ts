@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/api-auth";
-import { parseWorkflowData, type LoanDisbursementEntry } from "@/lib/client-workflow";
+import {
+  isLoanFullyDisbursed,
+  parseWorkflowData,
+  type LoanDisbursementEntry,
+} from "@/lib/client-workflow";
 import { getClientById } from "@/lib/clients-db";
 import { getPrisma } from "@/lib/prisma";
 import { generateId } from "@/lib/store";
@@ -28,6 +32,13 @@ export async function POST(
   if (data.paymentPath !== "loan") {
     return NextResponse.json(
       { error: "Client must be on the bank loan payment path" },
+      { status: 400 }
+    );
+  }
+
+  if (!data.loanExpectedAmount || data.loanExpectedAmount <= 0) {
+    return NextResponse.json(
+      { error: "Set total bank loan amount before recording disbursements" },
       { status: 400 }
     );
   }
@@ -110,10 +121,16 @@ export async function POST(
 
   data.loanDisbursements = [...(data.loanDisbursements ?? []), entry];
 
+  let workflowStep = "loan_disbursement";
+  if (type === "record" && isLoanFullyDisbursed(data)) {
+    data.loanTrackingComplete = true;
+    workflowStep = "closed";
+  }
+
   await getPrisma().client.update({
     where: { id: clientId },
     data: {
-      workflowStep: "loan_disbursement",
+      workflowStep,
       workflowData: JSON.stringify(data),
     },
   });

@@ -118,27 +118,38 @@ export default function DashboardPage() {
   const isAdmin = user.role === "super_admin";
   const detail = metrics.projectDetail;
   const showAllProjects = isAdmin && !projectFilter;
-  function revenueHref(type: "expected" | "collected" | "pending") {
-    const q = projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : "";
+  function revenueHref(
+    type: "expected" | "collected" | "pending",
+    projectId?: string
+  ) {
+    const pid = projectId ?? projectFilter;
+    const q = pid ? `&project=${encodeURIComponent(pid)}` : "";
     return `/portal/dashboard/revenue?type=${type}${q}`;
   }
 
-  function RevenueLink({
+  function RevenueCard({
+    label,
     amount,
     type,
-    className,
+    amountClassName,
+    compact,
   }: {
+    label: string;
     amount: string;
     type: "expected" | "collected" | "pending";
-    className?: string;
+    amountClassName: string;
+    compact?: boolean;
   }) {
     return (
       <Link
         href={revenueHref(type)}
-        className={`mt-1 block text-2xl font-bold underline decoration-dotted underline-offset-4 hover:decoration-solid ${className ?? ""}`}
-        title="View client-wise breakdown"
+        className={`card block transition-colors hover:border-teal-400 hover:bg-teal-50/30 ${compact ? "p-4" : "p-5"}`}
       >
-        {amount}
+        <p className="text-sm text-[var(--muted)]">{label}</p>
+        <p className={`mt-1 text-2xl font-bold ${amountClassName}`}>{amount}</p>
+        <p className="mt-2 text-xs font-medium text-teal-700">
+          View client breakdown →
+        </p>
       </Link>
     );
   }
@@ -167,30 +178,24 @@ export default function DashboardPage() {
         <>
           <h2 className="mb-4 text-lg font-semibold">{detail.name} — Revenue</h2>
           <div className="mb-8 grid gap-4 sm:grid-cols-3">
-            <div className="card p-5">
-              <p className="text-sm text-[var(--muted)]">Expected revenue (sold flats)</p>
-              <RevenueLink
-                amount={fmtCurrency(detail.expectedRevenue)}
-                type="expected"
-                className="text-[var(--brand)]"
-              />
-            </div>
-            <div className="card p-5">
-              <p className="text-sm text-[var(--muted)]">Collected so far</p>
-              <RevenueLink
-                amount={fmtCurrency(detail.collected)}
-                type="collected"
-                className="text-green-700"
-              />
-            </div>
-            <div className="card p-5">
-              <p className="text-sm text-[var(--muted)]">Yet to collect</p>
-              <RevenueLink
-                amount={fmtCurrency(detail.yetToCollect)}
-                type="pending"
-                className="text-amber-700"
-              />
-            </div>
+            <RevenueCard
+              label="Expected revenue (sold flats)"
+              amount={fmtCurrency(detail.expectedRevenue)}
+              type="expected"
+              amountClassName="text-[var(--brand)]"
+            />
+            <RevenueCard
+              label="Collected so far"
+              amount={fmtCurrency(detail.collected)}
+              type="collected"
+              amountClassName="text-green-700"
+            />
+            <RevenueCard
+              label="Yet to collect"
+              amount={fmtCurrency(detail.yetToCollect)}
+              type="pending"
+              amountClassName="text-amber-700"
+            />
           </div>
 
           <div className="mb-8 grid gap-6 lg:grid-cols-2">
@@ -251,30 +256,27 @@ export default function DashboardPage() {
       {showAllProjects && (
         <>
           <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="card p-4">
-              <p className="text-sm text-[var(--muted)]">Expected revenue (all sold)</p>
-              <RevenueLink
-                amount={fmtCurrency(metrics.revenue.target)}
-                type="expected"
-                className="text-[var(--brand)]"
-              />
-            </div>
-            <div className="card p-4">
-              <p className="text-sm text-[var(--muted)]">Collected</p>
-              <RevenueLink
-                amount={fmtCurrency(metrics.revenue.collected)}
-                type="collected"
-                className="text-green-700"
-              />
-            </div>
-            <div className="card p-4">
-              <p className="text-sm text-[var(--muted)]">Yet to collect</p>
-              <RevenueLink
-                amount={fmtCurrency(metrics.revenue.pending)}
-                type="pending"
-                className="text-amber-700"
-              />
-            </div>
+            <RevenueCard
+              label="Expected revenue (all sold)"
+              amount={fmtCurrency(metrics.revenue.target)}
+              type="expected"
+              amountClassName="text-[var(--brand)]"
+              compact
+            />
+            <RevenueCard
+              label="Collected"
+              amount={fmtCurrency(metrics.revenue.collected)}
+              type="collected"
+              amountClassName="text-green-700"
+              compact
+            />
+            <RevenueCard
+              label="Yet to collect"
+              amount={fmtCurrency(metrics.revenue.pending)}
+              type="pending"
+              amountClassName="text-amber-700"
+              compact
+            />
             <div className="card p-4">
               <p className="text-sm text-[var(--muted)]">Collection rate</p>
               <p className="mt-1 text-2xl font-bold text-[var(--brand)]">
@@ -321,9 +323,30 @@ export default function DashboardPage() {
                         {p.name}
                       </button>
                     </td>
-                    <td className="py-2 pr-4">{fmtCurrency(p.expectedRevenue)}</td>
-                    <td className="py-2 pr-4">{fmtCurrency(p.collected)}</td>
-                    <td className="py-2 pr-4">{fmtCurrency(p.yetToCollect)}</td>
+                    <td className="py-2 pr-4">
+                      <Link
+                        href={revenueHref("expected", p.id)}
+                        className="text-teal-700 hover:underline"
+                      >
+                        {fmtCurrency(p.expectedRevenue)}
+                      </Link>
+                    </td>
+                    <td className="py-2 pr-4">
+                      <Link
+                        href={revenueHref("collected", p.id)}
+                        className="text-teal-700 hover:underline"
+                      >
+                        {fmtCurrency(p.collected)}
+                      </Link>
+                    </td>
+                    <td className="py-2 pr-4">
+                      <Link
+                        href={revenueHref("pending", p.id)}
+                        className="text-amber-700 hover:underline"
+                      >
+                        {fmtCurrency(p.yetToCollect)}
+                      </Link>
+                    </td>
                     <td className="py-2">
                       {p.unitCounts.sold}/{p.unitCounts.total}
                     </td>

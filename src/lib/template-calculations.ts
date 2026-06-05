@@ -22,7 +22,7 @@ export function applyTemplateCalculations(
   const hasDetailed = fields.some((f) => f.key === "basicFlatCost");
 
   if (hasDetailed) {
-    const sbua = num(values, "builtUpSqft");
+    const sbua = num(values, "builtUpSqft") || num(values, "carpetAreaSqft");
     const rate = num(values, "basePricePerSqft");
     const premium = num(values, "floorPremium");
     set(values, "basicFlatCost", sbua * rate + premium);
@@ -53,6 +53,32 @@ export function applyTemplateCalculations(
   return values;
 }
 
+type PrefillUnit = {
+  unitNumber: string;
+  block: string | null;
+  floor: string | null;
+  areaSqft: number | null;
+  basePrice?: number;
+  facing?: string | null;
+  project: { name: string };
+};
+
+function resolvePrefillUnit(client: {
+  unit?: string | null;
+  tower?: string | null;
+  projectName?: string | null;
+  preferredUnit?: PrefillUnit | null;
+  deals?: { unit: Omit<PrefillUnit, "project"> }[];
+}): PrefillUnit | null {
+  if (client.preferredUnit) return client.preferredUnit;
+  const dealUnit = client.deals?.[0]?.unit;
+  if (!dealUnit) return null;
+  return {
+    ...dealUnit,
+    project: { name: client.projectName ?? "" },
+  };
+}
+
 export function buildClientPrefill(
   fields: TemplateFieldDef[],
   client: {
@@ -60,36 +86,42 @@ export function buildClientPrefill(
     projectName?: string | null;
     unit?: string | null;
     tower?: string | null;
-    preferredUnit?: {
-      unitNumber: string;
-      block: string | null;
-      floor: string | null;
-      areaSqft: number | null;
-      project: { name: string };
-    } | null;
+    preferredUnit?: PrefillUnit | null;
+    deals?: { unit: Omit<PrefillUnit, "project"> }[];
   }
 ): Record<string, string> {
+  const linked = resolvePrefillUnit(client);
   const values: Record<string, string> = {};
   for (const f of fields) {
     if (f.type === "section" || f.type === "computed") continue;
     switch (f.key) {
       case "projectName":
-        values[f.key] = client.projectName ?? client.preferredUnit?.project.name ?? "";
+        values[f.key] = client.projectName ?? linked?.project.name ?? "";
         break;
       case "unitNo":
       case "flatNumber":
-        values[f.key] = client.unit ?? client.preferredUnit?.unitNumber ?? "";
+        values[f.key] = client.unit ?? linked?.unitNumber ?? "";
         break;
       case "tower":
-        values[f.key] = client.tower ?? client.preferredUnit?.block ?? "";
+        values[f.key] = client.tower ?? linked?.block ?? "";
         break;
       case "floor":
-        values[f.key] = client.preferredUnit?.floor ?? "";
+        values[f.key] = linked?.floor ?? "";
+        break;
+      case "facing":
+        values[f.key] = linked?.facing ?? "";
         break;
       case "carpetAreaSqft":
       case "builtUpSqft":
-        if (client.preferredUnit?.areaSqft) {
-          values[f.key] = String(client.preferredUnit.areaSqft);
+        if (linked?.areaSqft) {
+          values[f.key] = String(linked.areaSqft);
+        } else {
+          values[f.key] = "";
+        }
+        break;
+      case "basePricePerSqft":
+        if (linked?.areaSqft && linked.basePrice && linked.areaSqft > 0) {
+          values[f.key] = String(Math.round(linked.basePrice / linked.areaSqft));
         } else {
           values[f.key] = "";
         }

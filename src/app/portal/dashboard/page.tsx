@@ -9,6 +9,10 @@ import {
   StackedBar,
   UnitStatusChart,
 } from "@/components/portal/DashboardCharts";
+import {
+  RevenueClientSplitModal,
+  type ClientRevenueRow,
+} from "@/components/portal/RevenueClientSplitModal";
 import { PropTrackShell } from "@/components/portal/PropTrackShell";
 import { PROJECT_STATUS_LABELS } from "@/lib/constants";
 import type { UserRole } from "@/lib/rbac";
@@ -60,7 +64,9 @@ interface Metrics {
       bookingAdvance: number;
       total: number;
     };
+    clientRevenue: ClientRevenueRow[];
   } | null;
+  clientRevenue: ClientRevenueRow[];
   payments: {
     todayCollections: number;
     dueThisWeek: number;
@@ -90,6 +96,9 @@ export default function DashboardPage() {
   } | null>(null);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [projectFilter, setProjectFilter] = useState("");
+  const [revenueModal, setRevenueModal] = useState<"expected" | "collected" | null>(
+    null
+  );
 
   const load = useCallback(async (project: string) => {
     const me = await fetch("/api/auth/me");
@@ -118,6 +127,28 @@ export default function DashboardPage() {
   const isAdmin = user.role === "super_admin";
   const detail = metrics.projectDetail;
   const showAllProjects = isAdmin && !projectFilter;
+  const clientRows = detail?.clientRevenue ?? metrics.clientRevenue;
+
+  function RevenueAmount({
+    amount,
+    mode,
+    className,
+  }: {
+    amount: string;
+    mode: "expected" | "collected";
+    className?: string;
+  }) {
+    return (
+      <button
+        type="button"
+        className={`mt-1 text-left text-2xl font-bold underline decoration-dotted underline-offset-4 hover:decoration-solid ${className ?? ""}`}
+        onClick={() => setRevenueModal(mode)}
+        title="Click to see client-wise split"
+      >
+        {amount}
+      </button>
+    );
+  }
 
   return (
     <PropTrackShell user={user}>
@@ -152,20 +183,24 @@ export default function DashboardPage() {
           <div className="mb-8 grid gap-4 sm:grid-cols-3">
             <div className="card p-5">
               <p className="text-sm text-[var(--muted)]">Expected revenue (sold flats)</p>
-              <p className="mt-1 text-2xl font-bold text-[var(--brand)]">
-                {fmtCurrency(detail.expectedRevenue)}
-              </p>
+              <RevenueAmount
+                amount={fmtCurrency(detail.expectedRevenue)}
+                mode="expected"
+                className="text-[var(--brand)]"
+              />
               <p className="mt-1 text-xs text-[var(--muted)]">
-                Sum of final deal prices for sold units
+                Click amount for client-wise split
               </p>
             </div>
             <div className="card p-5">
               <p className="text-sm text-[var(--muted)]">Collected so far</p>
-              <p className="mt-1 text-2xl font-bold text-green-700">
-                {fmtCurrency(detail.collected)}
-              </p>
+              <RevenueAmount
+                amount={fmtCurrency(detail.collected)}
+                mode="collected"
+                className="text-green-700"
+              />
               <p className="mt-1 text-xs text-[var(--muted)]">
-                Direct + advance + bank loan
+                Click amount for client-wise split
               </p>
             </div>
             <div className="card p-5">
@@ -234,17 +269,34 @@ export default function DashboardPage() {
       {showAllProjects && (
         <>
           <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              { label: "Expected revenue (all sold)", value: fmtCurrency(metrics.revenue.target) },
-              { label: "Collected", value: fmtCurrency(metrics.revenue.collected) },
-              { label: "Yet to collect", value: fmtCurrency(metrics.revenue.pending) },
-              { label: "Collection rate", value: `${metrics.collectionPct}%` },
-            ].map((c) => (
-              <div key={c.label} className="card p-4">
-                <p className="text-sm text-[var(--muted)]">{c.label}</p>
-                <p className="text-2xl font-bold text-[var(--brand)]">{c.value}</p>
-              </div>
-            ))}
+            <div className="card p-4">
+              <p className="text-sm text-[var(--muted)]">Expected revenue (all sold)</p>
+              <RevenueAmount
+                amount={fmtCurrency(metrics.revenue.target)}
+                mode="expected"
+                className="text-[var(--brand)]"
+              />
+            </div>
+            <div className="card p-4">
+              <p className="text-sm text-[var(--muted)]">Collected</p>
+              <RevenueAmount
+                amount={fmtCurrency(metrics.revenue.collected)}
+                mode="collected"
+                className="text-green-700"
+              />
+            </div>
+            <div className="card p-4">
+              <p className="text-sm text-[var(--muted)]">Yet to collect</p>
+              <p className="mt-1 text-2xl font-bold text-amber-700">
+                {fmtCurrency(metrics.revenue.pending)}
+              </p>
+            </div>
+            <div className="card p-4">
+              <p className="text-sm text-[var(--muted)]">Collection rate</p>
+              <p className="mt-1 text-2xl font-bold text-[var(--brand)]">
+                {metrics.collectionPct}%
+              </p>
+            </div>
           </div>
 
           <div className="card mb-8 p-5">
@@ -375,6 +427,21 @@ export default function DashboardPage() {
           </div>
         </>
       )}
+      <RevenueClientSplitModal
+        open={revenueModal !== null}
+        title={
+          revenueModal === "expected"
+            ? detail
+              ? `${detail.name} — Expected revenue by client`
+              : "Expected revenue by client"
+            : detail
+              ? `${detail.name} — Collected revenue by client`
+              : "Collected revenue by client"
+        }
+        mode={revenueModal ?? "expected"}
+        rows={clientRows}
+        onClose={() => setRevenueModal(null)}
+      />
     </PropTrackShell>
   );
 }

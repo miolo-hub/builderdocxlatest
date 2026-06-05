@@ -201,9 +201,13 @@ async function generateDetailedPriceSheetPdf(
     ctx = drawTableRow(ctx, [["Particulars", "Amount (Rs.)"]], true);
     for (const f of costRows) {
       const val = values[f.key];
-      if (!val) continue;
+      if (!val && f.type !== "computed" && !f.compute) continue;
       const isTotal = f.key === "totalAmount" || f.compute === "total";
-      ctx = drawTableRow(ctx, [[f.label, displayValue(f, val)]], isTotal);
+      ctx = drawTableRow(
+        ctx,
+        [[f.label, val ? displayValue(f, val) : "-"]],
+        isTotal
+      );
     }
     ctx = { ...ctx, y: ctx.y - 6 };
   }

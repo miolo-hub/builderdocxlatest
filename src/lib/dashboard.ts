@@ -46,6 +46,17 @@ export type ProjectRevenueRow = {
   };
 };
 
+export type ClientRevenueSplit = {
+  clientId: string;
+  name: string;
+  unit: string;
+  expected: number;
+  collected: number;
+  direct: number;
+  advance: number;
+  bankLoan: number;
+};
+
 export type ProjectRevenueDetail = ProjectRevenueRow & {
   collectedBreakdown: {
     directPayments: number;
@@ -53,7 +64,25 @@ export type ProjectRevenueDetail = ProjectRevenueRow & {
     bookingAdvance: number;
     total: number;
   };
+  clientRevenue: ClientRevenueSplit[];
 };
+
+function clientLinkedToProject(
+  c: {
+    projectName: string | null;
+    preferredUnit: { projectId: string; unitNumber?: string } | null;
+    units: { projectId: string; unitNumber?: string }[];
+    unit?: string | null;
+  },
+  projectId: string,
+  projectName: string
+) {
+  return (
+    c.preferredUnit?.projectId === projectId ||
+    c.units.some((u) => u.projectId === projectId) ||
+    (c.projectName?.toLowerCase() === projectName.toLowerCase() && !!c.projectName)
+  );
+}
 
 function computeProjectRevenue(
   projectId: string,
@@ -64,21 +93,26 @@ function computeProjectRevenue(
     status: string;
     basePrice: number;
     clientId: string | null;
+    unitNumber: string;
+    finalPrice?: number | null;
   }[],
   deals: {
     id: string;
+    clientId: string;
     finalPrice: number;
     unitId: string;
     paymentPlanType: string;
-    unit: { projectId: string; status: string; basePrice: number };
+    unit: { projectId: string; status: string; basePrice: number; unitNumber: string };
   }[],
   transactions: { dealId: string; amount: number; mode: string }[],
   clients: {
     id: string;
+    name: string;
+    unit: string | null;
     workflowData: string | null;
     projectName: string | null;
-    preferredUnit: { projectId: string } | null;
-    units: { projectId: string }[];
+    preferredUnit: { projectId: string; unitNumber: string } | null;
+    units: { projectId: string; unitNumber: string }[];
     deals: { id: string }[];
   }[]
 ): ProjectRevenueDetail {
@@ -106,11 +140,7 @@ function computeProjectRevenue(
 
   let bookingAdvance = 0;
   for (const c of clients) {
-    const linked =
-      c.preferredUnit?.projectId === projectId ||
-      c.units.some((u) => u.projectId === projectId) ||
-      (c.projectName?.toLowerCase() === projectName.toLowerCase() && c.projectName);
-    if (!linked) continue;
+    if (!clientLinkedToProject(c, projectId, projectName)) continue;
     const adv = advanceFromWorkflow(c.workflowData);
     if (adv <= 0) continue;
     if (c.deals.some((d) => dealIds.has(d.id))) {
@@ -132,6 +162,89 @@ function computeProjectRevenue(
   const collected = directPayments + bankLoan + bookingAdvance;
   const yetToCollect = Math.max(0, expectedRevenue - collected);
 
+  const clientRevenue = new Map<string, ClientRevenueSplit>();
+  const ensureSplit = (clientId: string) => {
+    if (!clientRevenue.has(clientId)) {
+      const c = clientsById.get(clientId);
+      const unitLabel =
+        c?.preferredUnit?.unitNumber ??
+        c?.units.find((u) => u.projectId === projectId)?.unitNumber ??
+        c?.unit ??
+        "—";
+      clientRevenue.set(clientId, {
+        clientId,
+        name: c?.name ?? "Unknown",
+        unit: unitLabel,
+        expected: 0,
+        collected: 0,
+        direct: 0,
+        advance: 0,
+        bankLoan: 0,
+      });
+    }
+    return clientRevenue.get(clientId)!;
+  };
+
+  for (const d of pDeals) {
+    const row = ensureSplit(d.clientId);
+    row.expected += d.finalPrice;
+    row.unit = d.unit.unitNumber;
+  }
+
+  for (const u of pUnits) {
+    if (u.status === "sold" && !dealUnitIds.has(u.id) && u.clientId) {
+      const row = ensureSplit(u.clientId);
+      row.expected += soldUnitExpectedPrice(u, clientsById);
+      row.unit = u.unitNumber;
+    }
+  }
+
+  const dealClientById = new Map(pDeals.map((d) => [d.id, d.clientId]));
+  for (const t of pTxns) {
+    const clientId = dealClientById.get(t.dealId);
+    if (!clientId) continue;
+    const row = ensureSplit(clientId);
+    if (LOAN_MODES.has(t.mode)) {
+      row.bankLoan += t.amount;
+    } else {
+      row.direct += t.amount;
+    }
+    row.collected += t.amount;
+  }
+
+  for (const c of clients) {
+    if (!clientLinkedToProject(c, projectId, projectName)) continue;
+    const adv = advanceFromWorkflow(c.workflowData);
+    const wf = parseWorkflowData(c.workflowData);
+    let extraLoan = 0;
+    for (const ld of wf.loanDisbursements ?? []) {
+      if (ld.status === "received" && !ld.transactionId) {
+        extraLoan += ld.amount;
+      }
+    }
+    if (adv <= 0 && extraLoan <= 0) continue;
+
+    const row = ensureSplit(c.id);
+    if (adv > 0) {
+      if (c.deals.some((d) => dealIds.has(d.id))) {
+        const paidOnDeals = pTxns
+          .filter((t) => c.deals.some((d) => d.id === t.dealId))
+          .reduce((s, t) => s + t.amount, 0);
+        if (paidOnDeals < adv) {
+          row.advance += adv;
+          row.collected += adv;
+        }
+      } else {
+        row.advance += adv;
+        row.collected += adv;
+      }
+    }
+    if (extraLoan > 0) {
+      row.bankLoan += extraLoan;
+      row.collected += extraLoan;
+    }
+  }
+
   return {
     id: projectId,
     name: projectName,
@@ -151,6 +264,9 @@ function computeProjectRevenue(
       bookingAdvance,
       total: collected,
     },
+    clientRevenue: [...clientRevenue.values()]
+      .filter((r) => r.expected > 0 || r.collected > 0)
+      .sort((a, b) => b.expected - a.expected || b.collected - a.collected),
   };
 }
 
@@ -161,13 +277,28 @@ export async function getDashboardMetrics(builderId: string, projectId?: string)
       prisma.project.findMany({ where: { builderId }, orderBy: { name: "asc" } }),
       prisma.unit.findMany({
         where: { project: { builderId } },
-        select: { id: true, projectId: true, status: true, basePrice: true, finalPrice: true, clientId: true },
+        select: {
+          id: true,
+          projectId: true,
+          status: true,
+          basePrice: true,
+          finalPrice: true,
+          clientId: true,
+          unitNumber: true,
+        },
       }),
       prisma.client.count({ where: { builderId } }),
       prisma.deal.findMany({
         where: { builderId },
         include: {
-          unit: { select: { projectId: true, status: true, basePrice: true } },
+          unit: {
+            select: {
+              projectId: true,
+              status: true,
+              basePrice: true,
+              unitNumber: true,
+            },
+          },
         },
       }),
       prisma.paymentScheduleItem.findMany({
@@ -182,10 +313,12 @@ export async function getDashboardMetrics(builderId: string, projectId?: string)
         where: { builderId },
         select: {
           id: true,
+          name: true,
+          unit: true,
           workflowData: true,
           projectName: true,
-          preferredUnit: { select: { projectId: true } },
-          units: { select: { projectId: true } },
+          preferredUnit: { select: { projectId: true, unitNumber: true } },
+          units: { select: { projectId: true, unitNumber: true } },
           deals: { select: { id: true } },
         },
       }),
@@ -263,6 +396,26 @@ export async function getDashboardMetrics(builderId: string, projectId?: string)
       )
     : null;
 
+  const allClientRevenue = projects
+    .flatMap((p) =>
+      computeProjectRevenue(p.id, p.name, units, deals, transactions, clients)
+        .clientRevenue
+    )
+    .reduce((acc, row) => {
+      const existing = acc.get(row.clientId);
+      if (!existing) {
+        acc.set(row.clientId, { ...row });
+        return acc;
+      }
+      existing.expected += row.expected;
+      existing.collected += row.collected;
+      existing.direct += row.direct;
+      existing.advance += row.advance;
+      existing.bankLoan += row.bankLoan;
+      if (existing.unit === "—" && row.unit !== "—") existing.unit = row.unit;
+      return acc;
+    }, new Map<string, ClientRevenueSplit>());
+
   return {
     projects: projects.length,
     projectList: projects.map((p) => ({ id: p.id, name: p.name })),
@@ -276,6 +429,9 @@ export async function getDashboardMetrics(builderId: string, projectId?: string)
     },
     revenueByProject,
     projectDetail,
+    clientRevenue: [...allClientRevenue.values()].sort(
+      (a, b) => b.expected - a.expected || b.collected - a.collected
+    ),
     collectionPct: fmtPct(revenueCollected, revenueTarget),
     payments: {
       todayCollections,

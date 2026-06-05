@@ -57,7 +57,7 @@ export async function PATCH(
         return NextResponse.json({ error: "Invalid decision" }, { status: 400 });
       }
       data.decision = decision;
-      workflowStep = "awaiting_decision";
+      workflowStep = decision === "cancelled" ? "closed" : "payment_path";
       if (decision === "cancelled") {
         stageUpdate = "cancelled";
       } else {

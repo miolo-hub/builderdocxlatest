@@ -6,6 +6,7 @@ import {
   isStepComplete,
   loanDisbursementsReceived,
   parseWorkflowData,
+  workflowStepLabel,
   workflowStepsForClient,
 } from "@/lib/client-workflow";
 import { TemplateGenerateModal } from "./TemplateGenerateModal";
@@ -135,7 +136,13 @@ export function ClientWorkflow({
                 {done ? "✓" : step.order}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="font-medium">{step.label}</p>
+                <p className="font-medium">{workflowStepLabel(step, data)}</p>
+
+                {step.id === "awaiting_decision" && data.decision && (
+                  <p className="mt-1 text-sm text-teal-800">
+                    {data.decision === "proceed" ? "Proceeding with booking" : "Booking cancelled"}
+                  </p>
+                )}
 
                 {step.id === "prospect" && active && canEdit && (
                   <button
@@ -204,6 +211,52 @@ export function ClientWorkflow({
                   </div>
                 )}
 
+                {step.id === "payment_path" &&
+                  active &&
+                  canEdit &&
+                  data.decision === "proceed" &&
+                  !data.paymentPath && (
+                    <div className="mt-3">
+                      <p className="mb-2 text-sm">How will the buyer pay the balance?</p>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          className="btn-primary text-sm"
+                          disabled={saving}
+                          onClick={() =>
+                            void workflowAction({ action: "payment_path", paymentPath: "loan" })
+                          }
+                        >
+                          Via bank loan
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-secondary text-sm"
+                          disabled={saving}
+                          onClick={() =>
+                            void workflowAction({
+                              action: "payment_path",
+                              paymentPath: "direct",
+                            })
+                          }
+                        >
+                          Direct payment
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                {step.id === "payment_path" &&
+                  done &&
+                  data.decision === "proceed" &&
+                  data.paymentPath && (
+                    <p className="mt-2 text-sm text-teal-800">
+                      {data.paymentPath === "loan"
+                        ? "Proceeding via bank loan"
+                        : "Proceeding with direct payment"}
+                    </p>
+                  )}
+
                 {step.id === "closed" && active && canEdit && data.decision === "cancelled" && (
                   <div className="mt-3">
                     <p className="mb-2 text-sm">Advance returned to client?</p>
@@ -233,45 +286,17 @@ export function ClientWorkflow({
                 )}
 
                 {step.id === "closed" &&
-                  active &&
-                  canEdit &&
+                  done &&
                   data.decision === "proceed" &&
-                  !data.paymentPath && (
-                    <div className="mt-3">
-                      <p className="mb-2 text-sm">How will the buyer pay?</p>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          className="btn-primary text-sm"
-                          disabled={saving}
-                          onClick={() =>
-                            void workflowAction({ action: "payment_path", paymentPath: "loan" })
-                          }
-                        >
-                          Via bank loan
-                        </button>
-                        <button
-                          type="button"
-                          className="btn-secondary text-sm"
-                          disabled={saving}
-                          onClick={() =>
-                            void workflowAction({
-                              action: "payment_path",
-                              paymentPath: "direct",
-                            })
-                          }
-                        >
-                          Direct payment
-                        </button>
-                      </div>
-                    </div>
+                  data.paymentPath === "direct" && (
+                    <p className="mt-2 text-sm text-teal-800">Journey complete — direct payment path</p>
                   )}
 
                 {step.id === "closed" &&
                   done &&
-                  data.decision === "proceed" &&
-                  data.paymentPath === "direct" && (
-                    <p className="mt-2 text-sm text-teal-800">Proceeding with direct payment</p>
+                  data.paymentPath === "loan" &&
+                  data.loanTrackingComplete && (
+                    <p className="mt-2 text-sm text-teal-800">Journey complete — loan tracking finished</p>
                   )}
 
                 {step.id === "loan_disbursement" && data.paymentPath === "loan" && (

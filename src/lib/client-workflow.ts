@@ -3,11 +3,12 @@ export const WORKFLOW_STEPS = [
   { id: "price_breakup_done", label: "Price breakup letter", order: 2 },
   { id: "advance_paid", label: "Paid advance", order: 3 },
   { id: "awaiting_decision", label: "Proceed or cancel", order: 4 },
-  { id: "closed", label: "Outcome", order: 5 },
+  { id: "payment_path", label: "Loan or direct payment", order: 5 },
   { id: "loan_disbursement", label: "Bank loan disbursement", order: 6 },
+  { id: "closed", label: "Complete", order: 7 },
 ] as const;
 
-export type WorkflowStepId = (typeof WORKFLOW_STEPS)[number]["id"] | "closed";
+export type WorkflowStepId = (typeof WORKFLOW_STEPS)[number]["id"];
 
 export type LoanDisbursementEntry = {
   id: string;
@@ -58,9 +59,39 @@ export function loanDisbursementsReceived(data: ClientWorkflowData): number {
     .reduce((s, d) => s + d.amount, 0);
 }
 
+export function workflowStepLabel(
+  step: (typeof WORKFLOW_STEPS)[number],
+  data: ClientWorkflowData
+): string {
+  if (step.id === "closed" && data.decision === "cancelled") {
+    return "Advance refund";
+  }
+  return step.label;
+}
+
 export function workflowStepsForClient(data: ClientWorkflowData) {
-  if (data.paymentPath === "loan") return WORKFLOW_STEPS;
-  return WORKFLOW_STEPS.filter((s) => s.id !== "loan_disbursement");
+  if (data.decision === "cancelled") {
+    return WORKFLOW_STEPS.filter(
+      (s) => s.id !== "payment_path" && s.id !== "loan_disbursement"
+    );
+  }
+  if (data.decision !== "proceed") {
+    return WORKFLOW_STEPS.filter(
+      (s) =>
+        s.id !== "payment_path" &&
+        s.id !== "loan_disbursement" &&
+        s.id !== "closed"
+    );
+  }
+  if (data.paymentPath === "direct") {
+    return WORKFLOW_STEPS.filter((s) => s.id !== "loan_disbursement");
+  }
+  if (!data.paymentPath) {
+    return WORKFLOW_STEPS.filter(
+      (s) => s.id !== "loan_disbursement" && s.id !== "closed"
+    );
+  }
+  return WORKFLOW_STEPS;
 }
 
 export function workflowStepIndex(step: string): number {
@@ -78,11 +109,13 @@ export function isStepComplete(
   if (stepId === "price_breakup_done") return !!data.advance?.documentId;
   if (stepId === "advance_paid") return !!data.advance?.documentId;
   if (stepId === "awaiting_decision") return !!data.decision;
+  if (stepId === "payment_path") return !!data.paymentPath;
   if (stepId === "closed") {
     if (data.decision === "cancelled") {
       return data.advanceRefunded !== undefined && data.advanceRefunded !== null;
     }
-    if (data.decision === "proceed") return !!data.paymentPath;
+    if (data.paymentPath === "direct") return true;
+    if (data.paymentPath === "loan") return !!data.loanTrackingComplete;
     return false;
   }
   if (stepId === "loan_disbursement") {
@@ -99,17 +132,10 @@ export function getActiveWorkflowStep(
   if (!data.priceBreakup?.documentId) return "prospect";
   if (!data.advance?.documentId) return "price_breakup_done";
   if (!data.decision) return "awaiting_decision";
-  if (data.decision === "cancelled") {
-    if (data.advanceRefunded === undefined || data.advanceRefunded === null) {
-      return "awaiting_decision";
-    }
-    return "closed";
-  }
-  if (data.decision === "proceed" && !data.paymentPath) return "awaiting_decision";
+  if (data.decision === "cancelled") return "closed";
+  if (!data.paymentPath) return "payment_path";
   if (data.paymentPath === "loan" && !data.loanTrackingComplete) {
     return "loan_disbursement";
   }
-  if (data.decision === "proceed" && data.paymentPath === "direct") return "closed";
-  if (data.paymentPath === "loan" && data.loanTrackingComplete) return "closed";
-  return workflowStep;
+  return "closed";
 }

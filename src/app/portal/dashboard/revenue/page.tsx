@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { fmtCurrency } from "@/components/portal/DashboardCharts";
 import { PropTrackShell } from "@/components/portal/PropTrackShell";
 import type { ClientRevenueSplit } from "@/lib/dashboard";
@@ -16,7 +16,7 @@ const TITLES: Record<RevenueType, string> = {
   pending: "Yet to collect by client",
 };
 
-export default function DashboardRevenuePage() {
+function DashboardRevenueContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const type = (searchParams.get("type") as RevenueType) || "expected";
@@ -216,5 +216,19 @@ export default function DashboardRevenuePage() {
         )}
       </div>
     </PropTrackShell>
+  );
+}
+
+export default function DashboardRevenuePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center text-[var(--muted)]">
+          Loading…
+        </div>
+      }
+    >
+      <DashboardRevenueContent />
+    </Suspense>
   );
 }

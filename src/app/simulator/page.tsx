@@ -47,13 +47,28 @@ export default function SimulatorPage() {
               </ol>
             </div>
             <div className="card p-5">
-              <h2 className="font-semibold text-[var(--brand)]">Production integration</h2>
+              <h2 className="font-semibold text-[var(--brand)]">Production — Interakt.ai</h2>
               <p className="mt-2 text-[var(--muted)]">
-                Replace this simulator with Meta Cloud API or Twilio webhooks pointing to{" "}
-                <code className="rounded bg-slate-100 px-1">/api/bot/message</code>.
-                OTP would be sent via SMS/WhatsApp template; files served from S3/GCS with
-                the same signed-URL pattern.
+                Connect Interakt incoming-message webhooks to{" "}
+                <code className="rounded bg-slate-100 px-1">/api/webhooks/interakt</code>. The
+                same <code className="rounded bg-slate-100 px-1">bot-engine</code> handles Hi →
+                menu → documents. Replies go out via Interakt session messages (24h window).
               </p>
+              <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-[var(--muted)]">
+                <li>
+                  Interakt → Developer settings → Webhook URL:{" "}
+                  <code className="rounded bg-slate-100 px-1">
+                    https://your-domain/api/webhooks/interakt
+                  </code>
+                </li>
+                <li>Enable <strong>message_received</strong> events (Growth / Advanced plan)</li>
+                <li>
+                  Set env: <code className="rounded bg-slate-100 px-1">INTERAKT_API_KEY</code>,{" "}
+                  <code className="rounded bg-slate-100 px-1">INTERAKT_WEBHOOK_SECRET</code>,{" "}
+                  <code className="rounded bg-slate-100 px-1">APP_BASE_URL</code>,{" "}
+                  <code className="rounded bg-slate-100 px-1">INTERNAL_BOT_SECRET</code>
+                </li>
+              </ol>
             </div>
             <div className="card border-amber-200 bg-amber-50 p-5">
               <p className="font-medium text-amber-900">Try end-to-end</p>

@@ -83,3 +83,20 @@ npx vercel env pull .env.vercel.local
 ```
 
 Use this to compare local vs deployed env names (not for committing secrets).
+
+## 6. WhatsApp bot (Interakt.ai)
+
+1. Subscribe to Interakt **Growth** or **Advanced** (incoming message webhooks + session reply API).
+2. In [Interakt Developer settings](https://app.interakt.ai/settings/developer-setting):
+   - Copy **API Key** → `INTERAKT_API_KEY`
+   - Set **Webhook URL** → `https://YOUR-APP.vercel.app/api/webhooks/interakt`
+   - Set **Webhook secret** → `INTERAKT_WEBHOOK_SECRET`
+   - Enable **message_received** events
+3. In Vercel env, also set:
+   - `APP_BASE_URL` = `https://YOUR-APP.vercel.app` (for PDF links in chat)
+   - `INTERNAL_BOT_SECRET` = long random string (worker auth)
+4. Redeploy. Customer sends **Hi** on WhatsApp → same menu as the simulator.
+
+**Flow:** WhatsApp → Interakt webhook → `/api/webhooks/interakt` → `/api/bot/process-inbound` → `bot-engine` → Interakt session reply.
+
+**Note:** Session (free-form) replies work within 24h after the customer messages you. Requires Interakt Advanced plan API access for session messages. Optional fallback: `INTERAKT_BOT_REPLY_TEMPLATE` utility template with one body variable.

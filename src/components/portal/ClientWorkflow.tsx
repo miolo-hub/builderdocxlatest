@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import {
+  canSendWelcomeKit,
   getActiveWorkflowStep,
-  isBookedClientStage,
   isStepComplete,
   loanDisbursementsReceived,
   parseWorkflowData,
@@ -17,6 +17,7 @@ interface ClientWorkflowProps {
   clientName: string;
   clientEmail?: string | null;
   clientStage: string;
+  hasDeal?: boolean;
   workflowStep: string;
   workflowDataRaw: string | null;
   canEdit: boolean;
@@ -28,13 +29,18 @@ export function ClientWorkflow({
   clientName,
   clientEmail,
   clientStage,
+  hasDeal = false,
   workflowStep,
   workflowDataRaw,
   canEdit,
   onUpdated,
 }: ClientWorkflowProps) {
   const data = parseWorkflowData(workflowDataRaw);
-  const activeStep = getActiveWorkflowStep(workflowStep, data);
+  const activeStep = getActiveWorkflowStep(workflowStep, data, {
+    clientStage,
+    hasDeal,
+  });
+  const welcomeUnlocked = canSendWelcomeKit(clientStage, hasDeal);
   const steps = workflowStepsForClient(data);
   const [showBreakup, setShowBreakup] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
@@ -132,7 +138,8 @@ export function ClientWorkflow({
     <div className="card p-6">
       <h3 className="mb-1 font-semibold text-[var(--brand)]">Client journey</h3>
       <p className="mb-6 text-sm text-[var(--muted)]">
-        Prospect → price breakup → advance → proceed/cancel → loan or direct → bank disbursement
+        Prospect → price breakup → advance → proceed/cancel → loan or direct → bank disbursement →
+        welcome email
       </p>
 
       <ol className="space-y-4">
@@ -403,58 +410,49 @@ export function ClientWorkflow({
                     )}
                   </div>
                 )}
+
+                {step.id === "welcome_kit" && (
+                  <div className="mt-3 space-y-2 text-sm">
+                    <p className="text-[var(--muted)]">
+                      Send a welcome email with the project brochure attached (uploaded during
+                      project onboarding).
+                    </p>
+                    {welcomeSent ? (
+                      <p className="text-teal-800">
+                        Sent to {data.welcomeEmail!.sentTo} on{" "}
+                        {new Date(data.welcomeEmail!.sentAt).toLocaleString("en-IN")}
+                        {data.welcomeEmail!.brochureAttached
+                          ? " · Brochure attached"
+                          : " · No brochure on file"}
+                      </p>
+                    ) : !welcomeUnlocked ? (
+                      <p className="text-amber-800">
+                        Book the flat first — use <strong>Book flat</strong> above or set client
+                        status to <strong>Booked</strong> after linking a unit.
+                      </p>
+                    ) : canEdit ? (
+                      !clientEmail?.trim() ? (
+                        <p className="text-amber-800">
+                          Add the client&apos;s email on their profile to send welcome mail.
+                        </p>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn-primary text-sm"
+                          disabled={saving}
+                          onClick={() => void sendWelcomeEmail()}
+                        >
+                          {saving ? "Sending…" : "Send welcome email"}
+                        </button>
+                      )
+                    ) : null}
+                  </div>
+                )}
               </div>
             </li>
           );
         })}
       </ol>
-
-      {isBookedClientStage(clientStage) && (
-        <div className="mt-8 rounded-lg border border-teal-200 bg-teal-50/40 p-4">
-          <div className="flex gap-4">
-            <span
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
-                welcomeSent ? "bg-teal-600 text-white" : "bg-teal-100 text-teal-800"
-              }`}
-            >
-              {welcomeSent ? "✓" : "8"}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="font-medium">Welcome email &amp; brochure</p>
-              <p className="mt-1 text-sm text-[var(--muted)]">
-                Send a welcome email to the buyer with the project brochure attached (from
-                project onboarding).
-              </p>
-              {welcomeSent ? (
-                <p className="mt-2 text-sm text-teal-800">
-                  Sent to {data.welcomeEmail!.sentTo} on{" "}
-                  {new Date(data.welcomeEmail!.sentAt).toLocaleString("en-IN")}
-                  {data.welcomeEmail!.brochureAttached ? " · Brochure attached" : " · No brochure on file"}
-                </p>
-              ) : (
-                canEdit && (
-                  <div className="mt-3">
-                    {!clientEmail?.trim() ? (
-                      <p className="text-sm text-amber-800">
-                        Add the client&apos;s email on their profile to send welcome mail.
-                      </p>
-                    ) : (
-                      <button
-                        type="button"
-                        className="btn-primary text-sm"
-                        disabled={saving}
-                        onClick={() => void sendWelcomeEmail()}
-                      >
-                        {saving ? "Sending…" : "Send welcome email"}
-                      </button>
-                    )}
-                  </div>
-                )
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
 

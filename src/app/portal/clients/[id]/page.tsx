@@ -124,6 +124,7 @@ export default function ClientDetailPage() {
           clientName={client.name}
           clientEmail={client.email}
           clientStage={client.stage}
+          hasDeal={!!deal}
           workflowStep={client.workflowStep ?? "prospect"}
           workflowDataRaw={client.workflowData ?? null}
           canEdit={canManageWorkflow}

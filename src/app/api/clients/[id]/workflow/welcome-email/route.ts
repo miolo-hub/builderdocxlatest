@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/api-auth";
-import { parseWorkflowData } from "@/lib/client-workflow";
+import { canSendWelcomeKit, parseWorkflowData } from "@/lib/client-workflow";
 import { sendWelcomeEmail } from "@/lib/email";
 import { getPrisma } from "@/lib/prisma";
 import { generateId } from "@/lib/store";
@@ -35,9 +35,17 @@ export async function POST(
     return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
 
-  if (!["booked", "active_buyer", "completed"].includes(client.stage)) {
+  const data = parseWorkflowData(client.workflowData);
+  if (data.decision !== "proceed") {
     return NextResponse.json(
-      { error: "Welcome email is available after the flat is booked" },
+      { error: "Welcome email is available after the client proceeds with booking" },
+      { status: 400 }
+    );
+  }
+
+  if (!canSendWelcomeKit(client.stage, client.deals.length > 0)) {
+    return NextResponse.json(
+      { error: "Book the flat first (Book flat or set status to Booked)" },
       { status: 400 }
     );
   }
@@ -49,7 +57,6 @@ export async function POST(
     );
   }
 
-  const data = parseWorkflowData(client.workflowData);
   if (data.welcomeEmail?.sentAt) {
     return NextResponse.json(
       { error: "Welcome email was already sent" },

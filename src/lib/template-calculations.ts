@@ -1,7 +1,8 @@
 import type { TemplateFieldDef } from "./document-templates";
 
 function num(values: Record<string, string>, key: string): number {
-  const v = parseFloat(values[key] ?? "");
+  const raw = String(values[key] ?? "").replace(/,/g, "").trim();
+  const v = parseFloat(raw);
   return Number.isNaN(v) ? 0 : v;
 }
 

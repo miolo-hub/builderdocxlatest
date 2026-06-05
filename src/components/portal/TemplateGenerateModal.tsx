@@ -6,7 +6,11 @@ import {
   type TemplateCategory,
   type TemplateFieldDef,
 } from "@/lib/document-templates";
-import { buildClientPrefill, buildReceiptPrefill } from "@/lib/template-calculations";
+import {
+  applyTemplateCalculations,
+  buildClientPrefill,
+  buildReceiptPrefill,
+} from "@/lib/template-calculations";
 import { TemplateFormFields } from "./TemplateFormFields";
 
 type TemplateRow = {
@@ -102,7 +106,10 @@ export function TemplateGenerateModal({
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ templateId: selectedId, values }),
+        body: JSON.stringify({
+          templateId: selectedId,
+          values: applyTemplateCalculations(fields, values),
+        }),
       }
     );
     setLoading(false);

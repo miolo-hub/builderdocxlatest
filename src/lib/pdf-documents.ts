@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { SYSTEM_TEMPLATE_IDS, type TemplateFieldDef } from "./document-templates";
+import { applyTemplateCalculations } from "./template-calculations";
 
 function formatInr(n: number | string | undefined): string {
   const v = typeof n === "string" ? parseFloat(n) : n;
@@ -62,14 +63,10 @@ function drawRow(ctx: PdfCtx, label: string, value: string, valueX = 280): PdfCt
   return { ...c, y: c.y - 16 };
 }
 
-function drawTableRow(
-  ctx: PdfCtx,
-  cols: [string, string][],
-  bold = false
-): PdfCtx {
+function drawTableRow(ctx: PdfCtx, cells: string[], bold = false): PdfCtx {
   let c = ensureSpace(ctx, 18);
-  const colWidth = (c.width - c.margin * 2) / cols.length;
-  cols.forEach(([text], i) => {
+  const colWidth = (c.width - c.margin * 2) / Math.max(cells.length, 1);
+  cells.forEach((text, i) => {
     c.page.drawText(sanitizeText(text), {
       x: c.margin + i * colWidth + 4,
       y: c.y,
@@ -129,7 +126,7 @@ function displayValue(field: TemplateFieldDef, val: string): string {
       !field.key.includes("Area") &&
       field.key !== "basePricePerSqft");
   if (isMoney) {
-    const n = parseFloat(val);
+    const n = parseFloat(val.replace(/,/g, ""));
     if (!Number.isNaN(n)) return formatInr(n);
   }
   if (field.type === "number" && field.key.includes("Pct")) return `${val}%`;
@@ -152,7 +149,8 @@ async function generateDetailedPriceSheetPdf(
   fields: TemplateFieldDef[],
   values: Record<string, string>
 ): Promise<Uint8Array> {
-  const project = values.projectName ?? "Project";
+  const computed = applyTemplateCalculations(fields, values);
+  const project = computed.projectName ?? "Project";
   let ctx = await startPdf(
     `Price sheet for your unit at ${project}`,
     builderName
@@ -185,27 +183,29 @@ async function generateDetailedPriceSheetPdf(
 
   if (unitRows.length > 0) {
     ctx = drawLine(ctx, "Unit details", 11, true);
-    ctx = drawTableRow(ctx, [["Field", "Value"]], true);
+    ctx = drawTableRow(ctx, ["Field", "Value"], true);
     for (let i = 0; i < unitRows.length; i += 2) {
       const a = unitRows[i];
       const b = unitRows[i + 1];
-      const valA = values[a.key] ? displayValue(a, values[a.key]) : "-";
-      const valB = b && values[b.key] ? displayValue(b, values[b.key]) : "";
-      ctx = drawTableRow(ctx, [[`${a.label}: ${valA}`, b ? `${b.label}: ${valB}` : ""]]);
+      const valA = computed[a.key] ? displayValue(a, computed[a.key]) : "-";
+      const valB = b && computed[b.key] ? displayValue(b, computed[b.key]) : "";
+      const cells = [`${a.label}: ${valA}`];
+      if (b) cells.push(`${b.label}: ${valB}`);
+      ctx = drawTableRow(ctx, cells);
     }
     ctx = { ...ctx, y: ctx.y - 6 };
   }
 
   if (costRows.length > 0) {
     ctx = drawLine(ctx, "Cost calculation", 11, true);
-    ctx = drawTableRow(ctx, [["Particulars", "Amount (Rs.)"]], true);
+    ctx = drawTableRow(ctx, ["Particulars", "Amount (Rs.)"], true);
     for (const f of costRows) {
-      const val = values[f.key];
+      const val = computed[f.key];
       if (!val && f.type !== "computed" && !f.compute) continue;
       const isTotal = f.key === "totalAmount" || f.compute === "total";
       ctx = drawTableRow(
         ctx,
-        [[f.label, val ? displayValue(f, val) : "-"]],
+        [f.label, val ? displayValue(f, val) : "-"],
         isTotal
       );
     }
@@ -213,7 +213,7 @@ async function generateDetailedPriceSheetPdf(
   }
 
   for (const f of otherRows) {
-    const val = values[f.key];
+    const val = computed[f.key];
     if (!val) continue;
     ctx = drawRow(ctx, f.label, displayValue(f, val), 320);
   }
@@ -240,6 +240,7 @@ export async function generateTemplatePdf(
     return generateDetailedPriceSheetPdf(builderName, clientName, fields, values);
   }
 
+  const computed = applyTemplateCalculations(fields, values);
   let ctx = await startPdf(templateName, builderName);
   ctx = drawLine(ctx, `Prepared for: ${clientName}`, 11, true);
   ctx = drawLine(ctx, `Date: ${new Date().toLocaleDateString("en-IN")}`, 10);
@@ -251,7 +252,7 @@ export async function generateTemplatePdf(
       ctx = drawLine(ctx, field.label, 12, true);
       continue;
     }
-    const val = values[field.key];
+    const val = computed[field.key];
     if (val === undefined || val === "") continue;
     const isTotal = field.compute === "total" || field.key === "totalAmount";
     if (isTotal) ctx = { ...ctx, y: ctx.y - 4 };

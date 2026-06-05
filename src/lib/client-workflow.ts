@@ -6,6 +6,7 @@ export const WORKFLOW_STEPS = [
   { id: "payment_path", label: "Loan or direct payment", order: 5 },
   { id: "loan_disbursement", label: "Bank loan disbursement", order: 6 },
   { id: "closed", label: "Complete", order: 7 },
+  { id: "welcome_kit", label: "Welcome email & brochure", order: 8 },
 ] as const;
 
 export type WorkflowStepId = (typeof WORKFLOW_STEPS)[number]["id"];
@@ -56,6 +57,14 @@ export function isBookedClientStage(stage: string): boolean {
   return (BOOKED_CLIENT_STAGES as readonly string[]).includes(stage);
 }
 
+export function showWelcomeKitInWorkflow(data: ClientWorkflowData): boolean {
+  return data.decision === "proceed";
+}
+
+export function canSendWelcomeKit(clientStage: string, hasDeal: boolean): boolean {
+  return isBookedClientStage(clientStage) || hasDeal;
+}
+
 export function parseWorkflowData(raw: string | null | undefined): ClientWorkflowData {
   if (!raw?.trim()) return {};
   try {
@@ -84,7 +93,10 @@ export function workflowStepLabel(
 export function workflowStepsForClient(data: ClientWorkflowData) {
   if (data.decision === "cancelled") {
     return WORKFLOW_STEPS.filter(
-      (s) => s.id !== "payment_path" && s.id !== "loan_disbursement"
+      (s) =>
+        s.id !== "payment_path" &&
+        s.id !== "loan_disbursement" &&
+        s.id !== "welcome_kit"
     );
   }
   if (data.decision !== "proceed") {
@@ -92,7 +104,8 @@ export function workflowStepsForClient(data: ClientWorkflowData) {
       (s) =>
         s.id !== "payment_path" &&
         s.id !== "loan_disbursement" &&
-        s.id !== "closed"
+        s.id !== "closed" &&
+        s.id !== "welcome_kit"
     );
   }
   if (data.paymentPath === "direct") {
@@ -100,7 +113,10 @@ export function workflowStepsForClient(data: ClientWorkflowData) {
   }
   if (!data.paymentPath) {
     return WORKFLOW_STEPS.filter(
-      (s) => s.id !== "loan_disbursement" && s.id !== "closed"
+      (s) =>
+        s.id !== "loan_disbursement" &&
+        s.id !== "closed" &&
+        s.id !== "welcome_kit"
     );
   }
   return WORKFLOW_STEPS;
@@ -134,12 +150,14 @@ export function isStepComplete(
     if (data.paymentPath !== "loan") return true;
     return !!data.loanTrackingComplete;
   }
+  if (stepId === "welcome_kit") return !!data.welcomeEmail?.sentAt;
   return false;
 }
 
 export function getActiveWorkflowStep(
   workflowStep: string,
-  data: ClientWorkflowData
+  data: ClientWorkflowData,
+  opts?: { clientStage?: string; hasDeal?: boolean }
 ): string {
   if (!data.priceBreakup?.documentId) return "prospect";
   if (!data.advance?.documentId) return "price_breakup_done";
@@ -149,5 +167,11 @@ export function getActiveWorkflowStep(
   if (data.paymentPath === "loan" && !data.loanTrackingComplete) {
     return "loan_disbursement";
   }
+  const canWelcome =
+    data.decision === "proceed" &&
+    !data.welcomeEmail?.sentAt &&
+    opts &&
+    canSendWelcomeKit(opts.clientStage ?? "", !!opts.hasDeal);
+  if (canWelcome) return "welcome_kit";
   return "closed";
 }

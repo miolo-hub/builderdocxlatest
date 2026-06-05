@@ -26,7 +26,7 @@ export async function GET() {
   return NextResponse.json(
     {
       ok,
-      product: "PropTrack CRM",
+      product: "Vikraya",
       message: ok
         ? "Ready"
         : "Set DATABASE_URL and JWT_SECRET on Vercel, run npm run db:seed-all, redeploy",

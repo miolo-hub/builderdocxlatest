@@ -3,7 +3,7 @@ import { verifyToken, type JwtPayload } from "./jwt";
 import { normalizeRole, type UserRole } from "./rbac";
 import { getPrisma } from "./prisma";
 
-const AUTH_COOKIE = "proptrack_token";
+const AUTH_COOKIE = "vikrayaos_token";
 
 export interface SessionUser {
   id: string;

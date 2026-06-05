@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { PropTrackShell } from "@/components/portal/PropTrackShell";
+import { VikrayaShell } from "@/components/portal/VikrayaShell";
 import type { UserRole } from "@/lib/rbac";
 
 export default function AuditPage() {
@@ -28,7 +28,7 @@ export default function AuditPage() {
   if (!user) return null;
 
   return (
-    <PropTrackShell user={user}>
+    <VikrayaShell user={user}>
       <h1 className="mb-6 text-2xl font-bold">Activity log</h1>
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
@@ -57,6 +57,6 @@ export default function AuditPage() {
           <p className="p-6 text-center text-[var(--muted)]">No activity yet.</p>
         )}
       </div>
-    </PropTrackShell>
+    </VikrayaShell>
   );
 }

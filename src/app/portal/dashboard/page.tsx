@@ -9,7 +9,7 @@ import {
   StackedBar,
   UnitStatusChart,
 } from "@/components/portal/DashboardCharts";
-import { PropTrackShell } from "@/components/portal/PropTrackShell";
+import { VikrayaShell } from "@/components/portal/VikrayaShell";
 import { PROJECT_STATUS_LABELS } from "@/lib/constants";
 import type { UserRole } from "@/lib/rbac";
 
@@ -155,7 +155,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <PropTrackShell user={user}>
+    <VikrayaShell user={user}>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <h1 className="text-2xl font-bold">Management Dashboard</h1>
         {isAdmin && (
@@ -434,6 +434,6 @@ export default function DashboardPage() {
           </div>
         </>
       )}
-    </PropTrackShell>
+    </VikrayaShell>
   );
 }

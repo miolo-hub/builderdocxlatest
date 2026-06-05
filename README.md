@@ -1,4 +1,4 @@
-# PropTrack CRM
+# Vikraya
 
 Real estate marketing CRM — inventory, clients, payments, documents, WhatsApp automation, and agent commissions.
 

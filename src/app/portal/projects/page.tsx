@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { AddProjectModal } from "@/components/portal/AddProjectModal";
 import { ProjectProgressEditor } from "@/components/portal/ProjectProgressEditor";
-import { PropTrackShell } from "@/components/portal/PropTrackShell";
+import { VikrayaShell } from "@/components/portal/VikrayaShell";
 import { PROJECT_STATUS_LABELS, PROJECT_STATUSES } from "@/lib/constants";
 import { can, type UserRole } from "@/lib/rbac";
 
@@ -76,7 +76,7 @@ export default function ProjectsPage() {
   const canDelete = can(user.role, "projects.delete");
 
   return (
-    <PropTrackShell user={user}>
+    <VikrayaShell user={user}>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <h1 className="text-2xl font-bold">Projects & Inventory</h1>
         {canAdd && (
@@ -155,6 +155,6 @@ export default function ProjectsPage() {
           ))}
         </div>
       )}
-    </PropTrackShell>
+    </VikrayaShell>
   );
 }

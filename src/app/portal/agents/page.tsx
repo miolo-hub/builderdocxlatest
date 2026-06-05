@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { PropTrackShell } from "@/components/portal/PropTrackShell";
+import { VikrayaShell } from "@/components/portal/VikrayaShell";
 import type { UserRole } from "@/lib/rbac";
 
 export default function AgentsPage() {
@@ -30,7 +30,7 @@ export default function AgentsPage() {
   if (!user) return null;
 
   return (
-    <PropTrackShell user={user}>
+    <VikrayaShell user={user}>
       <h1 className="mb-6 text-2xl font-bold">Agents & Commissions</h1>
       <div className="grid gap-4 sm:grid-cols-2">
         {agents.map((a, i) => (
@@ -43,6 +43,6 @@ export default function AgentsPage() {
           </div>
         ))}
       </div>
-    </PropTrackShell>
+    </VikrayaShell>
   );
 }

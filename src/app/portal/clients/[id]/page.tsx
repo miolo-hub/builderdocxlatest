@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { PropTrackShell } from "@/components/portal/PropTrackShell";
+import { VikrayaShell } from "@/components/portal/VikrayaShell";
 import { BookFlatModal } from "@/components/portal/BookFlatModal";
 import { DocumentUploadForm } from "@/components/portal/DocumentUploadForm";
 import { ClientStageSelect } from "@/components/portal/ClientStageSelect";
@@ -66,7 +66,7 @@ export default function ClientDetailPage() {
   const deal = client.deals[0];
 
   return (
-    <PropTrackShell user={user}>
+    <VikrayaShell user={user}>
       <Link href="/portal/clients" className="mb-4 inline-block text-sm text-teal-700 hover:underline">
         ← Clients
       </Link>
@@ -183,6 +183,6 @@ export default function ClientDetailPage() {
           </ul>
         </div>
       )}
-    </PropTrackShell>
+    </VikrayaShell>
   );
 }

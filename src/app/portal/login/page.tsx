@@ -59,9 +59,9 @@ export default function PortalLoginPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-teal-50 to-slate-100 px-4">
       <Link href="/" className="mb-8 flex items-center gap-2">
         <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--brand)] font-bold text-white">
-          PT
+          V
         </span>
-        <span className="text-xl font-bold text-[var(--brand)]">PropTrack CRM</span>
+        <span className="text-xl font-bold text-[var(--brand)]">Vikraya</span>
       </Link>
       <div className="card w-full max-w-md p-8">
         <h1 className="mb-6 text-2xl font-bold">Sign in</h1>

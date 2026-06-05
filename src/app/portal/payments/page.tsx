@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { PropTrackShell } from "@/components/portal/PropTrackShell";
+import { VikrayaShell } from "@/components/portal/VikrayaShell";
 import type { UserRole } from "@/lib/rbac";
 
 export default function PaymentsPage() {
@@ -29,7 +29,7 @@ export default function PaymentsPage() {
   if (!user) return null;
 
   return (
-    <PropTrackShell user={user}>
+    <VikrayaShell user={user}>
       <h1 className="mb-6 text-2xl font-bold">Payments & Finance</h1>
       <h2 className="mb-4 font-semibold text-red-700">Overdue installments</h2>
       <div className="card overflow-hidden">
@@ -57,6 +57,6 @@ export default function PaymentsPage() {
           <p className="p-6 text-center text-[var(--muted)]">No overdue payments 🎉</p>
         )}
       </div>
-    </PropTrackShell>
+    </VikrayaShell>
   );
 }

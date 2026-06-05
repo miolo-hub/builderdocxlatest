@@ -1,4 +1,4 @@
-# Deploying PropTrack CRM on Vercel
+# Deploying Vikraya on Vercel
 
 ## 1. Environment variables
 
@@ -46,7 +46,7 @@ https://YOUR-APP.vercel.app/api/health
 ```json
 {
   "ok": true,
-  "product": "PropTrack CRM",
+  "product": "Vikraya",
   "message": "Ready",
   "checks": {
     "database_url": "set",

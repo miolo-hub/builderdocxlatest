@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ProjectProgressEditor } from "@/components/portal/ProjectProgressEditor";
-import { PropTrackShell } from "@/components/portal/PropTrackShell";
+import { VikrayaShell } from "@/components/portal/VikrayaShell";
 import { can, type UserRole } from "@/lib/rbac";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -95,7 +95,7 @@ export default function InventoryPage() {
   const canEditProgress = can(user.role, "projects.manage");
 
   return (
-    <PropTrackShell user={user}>
+    <VikrayaShell user={user}>
       <Link href="/portal/projects" className="mb-4 inline-block text-sm text-teal-700 hover:underline">
         ← Projects
       </Link>
@@ -218,6 +218,6 @@ export default function InventoryPage() {
           </div>
         ))}
       </div>
-    </PropTrackShell>
+    </VikrayaShell>
   );
 }

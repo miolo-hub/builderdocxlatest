@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { PropTrackShell } from "@/components/portal/PropTrackShell";
+import { VikrayaShell } from "@/components/portal/VikrayaShell";
 import { TEMPLATE_CATEGORY_LABELS, type TemplateCategory } from "@/lib/document-templates";
 import { can, type UserRole } from "@/lib/rbac";
 
@@ -78,7 +78,7 @@ export default function TemplatesPage() {
   const categories: TemplateCategory[] = ["cost_breakup", "payment_receipt"];
 
   return (
-    <PropTrackShell user={user}>
+    <VikrayaShell user={user}>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Templates</h1>
@@ -206,6 +206,6 @@ export default function TemplatesPage() {
           </section>
         );
       })}
-    </PropTrackShell>
+    </VikrayaShell>
   );
 }

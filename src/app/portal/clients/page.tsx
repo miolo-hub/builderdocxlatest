@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { AddCustomerModal } from "@/components/portal/AddCustomerModal";
 import { ClientStageSelect } from "@/components/portal/ClientStageSelect";
-import { PropTrackShell } from "@/components/portal/PropTrackShell";
+import { VikrayaShell } from "@/components/portal/VikrayaShell";
 import { CLIENT_STAGE_LABELS, CLIENT_STAGES } from "@/lib/constants";
 import { can, type UserRole } from "@/lib/rbac";
 
@@ -62,7 +62,7 @@ export default function ClientsPage() {
   const canAdd = can(user.role, "clients.manage");
 
   return (
-    <PropTrackShell user={user}>
+    <VikrayaShell user={user}>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <h1 className="text-2xl font-bold">Clients</h1>
         {canAdd && (
@@ -144,6 +144,6 @@ export default function ClientsPage() {
       {clients.length === 0 && (
         <p className="text-center text-[var(--muted)]">No clients match your filters.</p>
       )}
-    </PropTrackShell>
+    </VikrayaShell>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { PropTrackShell } from "@/components/portal/PropTrackShell";
+import { VikrayaShell } from "@/components/portal/VikrayaShell";
 import type { UserRole } from "@/lib/rbac";
 
 export default function DealsPage() {
@@ -32,7 +32,7 @@ export default function DealsPage() {
   if (!user) return null;
 
   return (
-    <PropTrackShell user={user}>
+    <VikrayaShell user={user}>
       <h1 className="mb-6 text-2xl font-bold">Deals</h1>
       <div className="card overflow-hidden">
         <table className="w-full text-left text-sm">
@@ -60,6 +60,6 @@ export default function DealsPage() {
           </tbody>
         </table>
       </div>
-    </PropTrackShell>
+    </VikrayaShell>
   );
 }

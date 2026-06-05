@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { fmtCurrency } from "@/components/portal/DashboardCharts";
-import { PropTrackShell } from "@/components/portal/PropTrackShell";
+import { VikrayaShell } from "@/components/portal/VikrayaShell";
 import type { ClientRevenueSplit } from "@/lib/dashboard";
 import type { UserRole } from "@/lib/rbac";
 
@@ -83,7 +83,7 @@ function DashboardRevenueContent() {
   const backHref = projectId ? `/portal/dashboard?project=${projectId}` : "/portal/dashboard";
 
   return (
-    <PropTrackShell user={user}>
+    <VikrayaShell user={user}>
       <Link href={backHref} className="mb-4 inline-block text-sm text-teal-700 hover:underline">
         ← Dashboard
       </Link>
@@ -215,7 +215,7 @@ function DashboardRevenueContent() {
           </table>
         )}
       </div>
-    </PropTrackShell>
+    </VikrayaShell>
   );
 }
 

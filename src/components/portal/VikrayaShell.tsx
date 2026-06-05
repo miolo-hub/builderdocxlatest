@@ -21,12 +21,12 @@ const SETTINGS_NAV = {
   icon: "📄",
 };
 
-interface PropTrackShellProps {
+interface VikrayaShellProps {
   user: { name: string; role: UserRole; builderName?: string };
   children: React.ReactNode;
 }
 
-export function PropTrackShell({ user, children }: PropTrackShellProps) {
+export function VikrayaShell({ user, children }: VikrayaShellProps) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -41,10 +41,10 @@ export function PropTrackShell({ user, children }: PropTrackShellProps) {
         <div className="border-b border-[var(--border)] p-4">
           <Link href="/portal/dashboard" className="flex items-center gap-2">
             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--brand)] text-xs font-bold text-white">
-              PT
+              V
             </span>
             <div>
-              <p className="font-bold text-[var(--brand)]">PropTrack CRM</p>
+              <p className="font-bold text-[var(--brand)]">Vikraya</p>
               <p className="text-xs text-[var(--muted)]">{user.builderName}</p>
             </div>
           </Link>
@@ -82,7 +82,7 @@ export function PropTrackShell({ user, children }: PropTrackShellProps) {
 
       <div className="flex flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-[var(--border)] bg-white px-4 py-3">
-          <p className="text-sm font-medium lg:hidden">PropTrack CRM</p>
+          <p className="text-sm font-medium lg:hidden">Vikraya</p>
           <div className="ml-auto flex items-center gap-4">
             <div className="text-right text-sm">
               <p className="font-medium">{user.name}</p>

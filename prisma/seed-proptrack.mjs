@@ -139,7 +139,7 @@ await db.query(
    VALUES ('ms_1','proj_lakeside','Structure Complete',68,NOW(),NOW()) ON CONFLICT (id) DO NOTHING`
 );
 
-console.log("PropTrack seed complete.");
+console.log("Vikraya seed complete.");
 console.log("Login: admin@prestige.demo / admin123 | sales@prestige.demo / sales123");
 console.log("       accounts@prestige.demo / accounts123 | docs@prestige.demo / docs123");
 await db.end();

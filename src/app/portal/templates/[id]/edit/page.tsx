@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { PropTrackShell } from "@/components/portal/PropTrackShell";
+import { VikrayaShell } from "@/components/portal/VikrayaShell";
 import type { TemplateFieldDef } from "@/lib/document-templates";
 import { can, type UserRole } from "@/lib/rbac";
 
@@ -78,7 +78,7 @@ export default function TemplateEditPage() {
   if (!user) return null;
 
   return (
-    <PropTrackShell user={user}>
+    <VikrayaShell user={user}>
       <Link href="/portal/templates" className="mb-4 inline-block text-sm text-teal-700 hover:underline">
         ← Templates
       </Link>
@@ -188,6 +188,6 @@ export default function TemplateEditPage() {
         </div>
         {message && <p className="text-sm text-teal-800">{message}</p>}
       </div>
-    </PropTrackShell>
+    </VikrayaShell>
   );
 }

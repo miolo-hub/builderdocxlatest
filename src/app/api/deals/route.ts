@@ -1,21 +1,66 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/api-auth";
+import {
+  loanDisbursementProgress,
+  parseWorkflowData,
+} from "@/lib/client-workflow";
+import { backfillMissingDealsForBuilder } from "@/lib/deal-sync";
 import { getPrisma } from "@/lib/prisma";
 import { generateId } from "@/lib/store";
 
-export async function GET() {
+function loanSummaryForDeal(workflowData: string | null) {
+  const data = parseWorkflowData(workflowData);
+  if (data.paymentPath !== "loan") return null;
+  const progress = loanDisbursementProgress(data);
+  if (!progress) return null;
+  const remainingPercent = Math.max(
+    0,
+    Math.round((100 - progress.percent) * 10) / 10
+  );
+  return {
+    expected: progress.expected,
+    received: progress.received,
+    disbursedPercent: progress.percent,
+    remainingPercent,
+    isComplete: progress.isComplete,
+  };
+}
+
+export async function GET(request: Request) {
   const { user, error } = await requireUser();
   if (error) return error;
+  await backfillMissingDealsForBuilder(user!.builderId);
+
+  const project = new URL(request.url).searchParams.get("project")?.trim() ?? "";
+
   const deals = await getPrisma().deal.findMany({
-    where: { builderId: user!.builderId },
+    where: {
+      builderId: user!.builderId,
+      ...(project
+        ? {
+            unit: {
+              project: {
+                name: { equals: project, mode: "insensitive" },
+              },
+            },
+          }
+        : {}),
+    },
     include: {
-      client: { select: { name: true, phone: true } },
+      client: { select: { name: true, phone: true, workflowData: true } },
       unit: { select: { unitNumber: true, project: { select: { name: true } } } },
       agent: { select: { name: true } },
     },
     orderBy: { bookingDate: "desc" },
   });
-  return NextResponse.json({ deals });
+
+  return NextResponse.json({
+    deals: deals.map(({ client, ...deal }) => ({
+      ...deal,
+      client: { name: client.name, phone: client.phone },
+      loan: loanSummaryForDeal(client.workflowData),
+    })),
+  });
 }
 
 export async function POST(request: Request) {

@@ -1,4 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
+import { isBookedClientStage } from "./client-workflow";
+import { ensureDealForBookedClient } from "./deal-sync";
 import {
   assertFinalPriceForClient,
   clientStageRequiresFinalPrice,
@@ -264,6 +266,22 @@ export async function syncClientInventoryForStage(
     });
 
     await releaseClientUnitsWithoutDeal(tx, clientId, unit.id);
+
+    if (
+      targetStatus === "sold" &&
+      isBookedClientStage(newStage) &&
+      finalPrice !== undefined
+    ) {
+      const refreshed = await tx.client.findUnique({ where: { id: clientId } });
+      await ensureDealForBookedClient(tx, {
+        clientId,
+        builderId,
+        unitId: unit.id,
+        finalPrice,
+        agentId: refreshed?.assignedAgentId,
+        bookingDate: unit.bookingDate ?? new Date(),
+      });
+    }
 
     const updated = await tx.client.findUnique({ where: { id: clientId } });
     return { client: updated, unitSynced: true, unitId: unit.id };

@@ -9,10 +9,6 @@ import {
   StackedBar,
   UnitStatusChart,
 } from "@/components/portal/DashboardCharts";
-import {
-  RevenueClientSplitModal,
-  type ClientRevenueRow,
-} from "@/components/portal/RevenueClientSplitModal";
 import { PropTrackShell } from "@/components/portal/PropTrackShell";
 import { PROJECT_STATUS_LABELS } from "@/lib/constants";
 import type { UserRole } from "@/lib/rbac";
@@ -64,9 +60,7 @@ interface Metrics {
       bookingAdvance: number;
       total: number;
     };
-    clientRevenue: ClientRevenueRow[];
   } | null;
-  clientRevenue: ClientRevenueRow[];
   payments: {
     todayCollections: number;
     dueThisWeek: number;
@@ -96,9 +90,6 @@ export default function DashboardPage() {
   } | null>(null);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [projectFilter, setProjectFilter] = useState("");
-  const [revenueModal, setRevenueModal] = useState<"expected" | "collected" | null>(
-    null
-  );
 
   const load = useCallback(async (project: string) => {
     const me = await fetch("/api/auth/me");
@@ -127,26 +118,28 @@ export default function DashboardPage() {
   const isAdmin = user.role === "super_admin";
   const detail = metrics.projectDetail;
   const showAllProjects = isAdmin && !projectFilter;
-  const clientRows = detail?.clientRevenue ?? metrics.clientRevenue;
+  function revenueHref(type: "expected" | "collected" | "pending") {
+    const q = projectFilter ? `&project=${encodeURIComponent(projectFilter)}` : "";
+    return `/portal/dashboard/revenue?type=${type}${q}`;
+  }
 
-  function RevenueAmount({
+  function RevenueLink({
     amount,
-    mode,
+    type,
     className,
   }: {
     amount: string;
-    mode: "expected" | "collected";
+    type: "expected" | "collected" | "pending";
     className?: string;
   }) {
     return (
-      <button
-        type="button"
-        className={`mt-1 text-left text-2xl font-bold underline decoration-dotted underline-offset-4 hover:decoration-solid ${className ?? ""}`}
-        onClick={() => setRevenueModal(mode)}
-        title="Click to see client-wise split"
+      <Link
+        href={revenueHref(type)}
+        className={`mt-1 block text-2xl font-bold underline decoration-dotted underline-offset-4 hover:decoration-solid ${className ?? ""}`}
+        title="View client-wise breakdown"
       >
         {amount}
-      </button>
+      </Link>
     );
   }
 
@@ -170,44 +163,33 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {metrics.payments.overdueCount > 0 && (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-900">
-          {metrics.payments.overdueCount} overdue installments —{" "}
-          {fmtCurrency(metrics.payments.overdueAmount)} outstanding
-        </div>
-      )}
-
       {isAdmin && detail && (
         <>
           <h2 className="mb-4 text-lg font-semibold">{detail.name} — Revenue</h2>
           <div className="mb-8 grid gap-4 sm:grid-cols-3">
             <div className="card p-5">
               <p className="text-sm text-[var(--muted)]">Expected revenue (sold flats)</p>
-              <RevenueAmount
+              <RevenueLink
                 amount={fmtCurrency(detail.expectedRevenue)}
-                mode="expected"
+                type="expected"
                 className="text-[var(--brand)]"
               />
-              <p className="mt-1 text-xs text-[var(--muted)]">
-                Click amount for client-wise split
-              </p>
             </div>
             <div className="card p-5">
               <p className="text-sm text-[var(--muted)]">Collected so far</p>
-              <RevenueAmount
+              <RevenueLink
                 amount={fmtCurrency(detail.collected)}
-                mode="collected"
+                type="collected"
                 className="text-green-700"
               />
-              <p className="mt-1 text-xs text-[var(--muted)]">
-                Click amount for client-wise split
-              </p>
             </div>
             <div className="card p-5">
               <p className="text-sm text-[var(--muted)]">Yet to collect</p>
-              <p className="mt-1 text-2xl font-bold text-amber-700">
-                {fmtCurrency(detail.yetToCollect)}
-              </p>
+              <RevenueLink
+                amount={fmtCurrency(detail.yetToCollect)}
+                type="pending"
+                className="text-amber-700"
+              />
             </div>
           </div>
 
@@ -271,25 +253,27 @@ export default function DashboardPage() {
           <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="card p-4">
               <p className="text-sm text-[var(--muted)]">Expected revenue (all sold)</p>
-              <RevenueAmount
+              <RevenueLink
                 amount={fmtCurrency(metrics.revenue.target)}
-                mode="expected"
+                type="expected"
                 className="text-[var(--brand)]"
               />
             </div>
             <div className="card p-4">
               <p className="text-sm text-[var(--muted)]">Collected</p>
-              <RevenueAmount
+              <RevenueLink
                 amount={fmtCurrency(metrics.revenue.collected)}
-                mode="collected"
+                type="collected"
                 className="text-green-700"
               />
             </div>
             <div className="card p-4">
               <p className="text-sm text-[var(--muted)]">Yet to collect</p>
-              <p className="mt-1 text-2xl font-bold text-amber-700">
-                {fmtCurrency(metrics.revenue.pending)}
-              </p>
+              <RevenueLink
+                amount={fmtCurrency(metrics.revenue.pending)}
+                type="pending"
+                className="text-amber-700"
+              />
             </div>
             <div className="card p-4">
               <p className="text-sm text-[var(--muted)]">Collection rate</p>
@@ -427,21 +411,6 @@ export default function DashboardPage() {
           </div>
         </>
       )}
-      <RevenueClientSplitModal
-        open={revenueModal !== null}
-        title={
-          revenueModal === "expected"
-            ? detail
-              ? `${detail.name} — Expected revenue by client`
-              : "Expected revenue by client"
-            : detail
-              ? `${detail.name} — Collected revenue by client`
-              : "Collected revenue by client"
-        }
-        mode={revenueModal ?? "expected"}
-        rows={clientRows}
-        onClose={() => setRevenueModal(null)}
-      />
     </PropTrackShell>
   );
 }

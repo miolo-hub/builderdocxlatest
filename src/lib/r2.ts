@@ -39,7 +39,16 @@ export function getR2Bucket(): string {
 
 /** R2 object keys use this prefix (not local /uploads/ paths). */
 export function isR2ObjectKey(filePath: string): boolean {
-  return filePath.startsWith("documents/");
+  return filePath.startsWith("documents/") || filePath.startsWith("projects/");
+}
+
+export function buildProjectBrochureKey(
+  builderId: string,
+  projectId: string,
+  fileName: string
+): string {
+  const safe = fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
+  return `projects/${builderId}/${projectId}/${Date.now()}-${safe}`;
 }
 
 export function buildObjectKey(

@@ -20,6 +20,7 @@ export default function ClientDetailPage() {
   const [client, setClient] = useState<{
     name: string;
     phone: string;
+    email: string | null;
     stage: string;
     unit: string | null;
     tower: string | null;
@@ -73,7 +74,10 @@ export default function ClientDetailPage() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold">{client.name}</h1>
-            <p className="text-[var(--muted)]">{client.phone}</p>
+            <p className="text-[var(--muted)]">
+              {client.phone}
+              {client.email ? ` · ${client.email}` : ""}
+            </p>
             {(client.unit || client.projectName) && (
               <p className="mt-1 text-sm">
                 {client.unit && <span>{client.unit}</span>}
@@ -118,6 +122,8 @@ export default function ClientDetailPage() {
         <ClientWorkflow
           clientId={id}
           clientName={client.name}
+          clientEmail={client.email}
+          clientStage={client.stage}
           workflowStep={client.workflowStep ?? "prospect"}
           workflowDataRaw={client.workflowData ?? null}
           canEdit={canManageWorkflow}

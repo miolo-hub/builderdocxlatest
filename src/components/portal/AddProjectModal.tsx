@@ -24,6 +24,7 @@ export function AddProjectModal({ open, onClose, onCreated }: AddProjectModalPro
   const [defaultBasePrice, setDefaultBasePrice] = useState("");
   const [constructionPct, setConstructionPct] = useState("0");
   const [excelFile, setExcelFile] = useState<File | null>(null);
+  const [brochureFile, setBrochureFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -53,7 +54,15 @@ export function AddProjectModal({ open, onClose, onCreated }: AddProjectModalPro
     setDefaultBasePrice("");
     setConstructionPct("0");
     setExcelFile(null);
+    setBrochureFile(null);
     setError("");
+  }
+
+  async function uploadBrochure(projectId: string) {
+    if (!brochureFile) return;
+    const form = new FormData();
+    form.append("file", brochureFile);
+    await fetch(`/api/projects/${projectId}/brochure`, { method: "POST", body: form });
   }
 
   async function handleTowerSubmit(e: React.FormEvent) {
@@ -85,6 +94,7 @@ export function AddProjectModal({ open, onClose, onCreated }: AddProjectModalPro
       setError(data.error ?? "Failed to create project");
       return;
     }
+    if (data.project?.id) await uploadBrochure(data.project.id);
     reset();
     onCreated();
     onClose();
@@ -113,6 +123,7 @@ export function AddProjectModal({ open, onClose, onCreated }: AddProjectModalPro
       setError(data.error ?? "Import failed");
       return;
     }
+    if (data.project?.id) await uploadBrochure(data.project.id);
     reset();
     onCreated();
     onClose();
@@ -175,6 +186,18 @@ export function AddProjectModal({ open, onClose, onCreated }: AddProjectModalPro
               />
             </label>
           </div>
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium">Project brochure (optional)</span>
+            <input
+              type="file"
+              className="input"
+              accept=".pdf,image/*"
+              onChange={(e) => setBrochureFile(e.target.files?.[0] ?? null)}
+            />
+            <span className="mt-1 block text-xs text-[var(--muted)]">
+              PDF or image — attached to welcome emails after a flat is booked.
+            </span>
+          </label>
         </div>
 
         {mode === "tower_layout" ? (

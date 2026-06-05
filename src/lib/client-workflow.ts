@@ -42,7 +42,19 @@ export type ClientWorkflowData = {
   paymentPath?: "loan" | "direct";
   loanDisbursements?: LoanDisbursementEntry[];
   loanTrackingComplete?: boolean;
+  welcomeEmail?: {
+    sentAt: string;
+    sentTo: string;
+    brochureAttached?: boolean;
+    projectName?: string;
+  };
 };
+
+export const BOOKED_CLIENT_STAGES = ["booked", "active_buyer", "completed"] as const;
+
+export function isBookedClientStage(stage: string): boolean {
+  return (BOOKED_CLIENT_STAGES as readonly string[]).includes(stage);
+}
 
 export function parseWorkflowData(raw: string | null | undefined): ClientWorkflowData {
   if (!raw?.trim()) return {};

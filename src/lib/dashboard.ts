@@ -52,6 +52,7 @@ export type ClientRevenueSplit = {
   unit: string;
   expected: number;
   collected: number;
+  pending: number;
   direct: number;
   advance: number;
   bankLoan: number;
@@ -177,6 +178,7 @@ function computeProjectRevenue(
         unit: unitLabel,
         expected: 0,
         collected: 0,
+        pending: 0,
         direct: 0,
         advance: 0,
         bankLoan: 0,
@@ -265,6 +267,10 @@ function computeProjectRevenue(
       total: collected,
     },
     clientRevenue: [...clientRevenue.values()]
+      .map((r) => ({
+        ...r,
+        pending: Math.max(0, r.expected - r.collected),
+      }))
       .filter((r) => r.expected > 0 || r.collected > 0)
       .sort((a, b) => b.expected - a.expected || b.collected - a.collected),
   };
@@ -404,11 +410,12 @@ export async function getDashboardMetrics(builderId: string, projectId?: string)
     .reduce((acc, row) => {
       const existing = acc.get(row.clientId);
       if (!existing) {
-        acc.set(row.clientId, { ...row });
+        acc.set(row.clientId, { ...row, pending: Math.max(0, row.expected - row.collected) });
         return acc;
       }
       existing.expected += row.expected;
       existing.collected += row.collected;
+      existing.pending += row.pending;
       existing.direct += row.direct;
       existing.advance += row.advance;
       existing.bankLoan += row.bankLoan;

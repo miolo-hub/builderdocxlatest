@@ -12,6 +12,11 @@ interface ProjectProgressEditorProps {
   compact?: boolean;
 }
 
+/** Hide construction controls once project is completed or in handover */
+function isConstructionRelevant(status: string) {
+  return status !== "completed" && status !== "handover";
+}
+
 export function ProjectProgressEditor({
   projectId,
   status: initialStatus,
@@ -26,6 +31,8 @@ export function ProjectProgressEditor({
   const [error, setError] = useState("");
   const [dirty, setDirty] = useState(false);
 
+  const showConstruction = isConstructionRelevant(status);
+
   useEffect(() => {
     setStatus(initialStatus);
     setPct(String(initialPct));
@@ -36,14 +43,17 @@ export function ProjectProgressEditor({
     return (
       <div className={compact ? "text-sm" : ""}>
         <p className="text-sm text-[var(--muted)]">
-          {PROJECT_STATUS_LABELS[initialStatus] ?? initialStatus} · {initialPct}% construction
+          {PROJECT_STATUS_LABELS[initialStatus] ?? initialStatus}
+          {isConstructionRelevant(initialStatus) && ` · ${initialPct}% construction`}
         </p>
-        <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-200">
-          <div
-            className="h-full rounded-full bg-teal-600 transition-all"
-            style={{ width: `${Math.min(100, Math.max(0, initialPct))}%` }}
-          />
-        </div>
+        {isConstructionRelevant(initialStatus) && (
+          <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-200">
+            <div
+              className="h-full rounded-full bg-teal-600 transition-all"
+              style={{ width: `${Math.min(100, Math.max(0, initialPct))}%` }}
+            />
+          </div>
+        )}
       </div>
     );
   }
@@ -55,7 +65,10 @@ export function ProjectProgressEditor({
     const res = await fetch(`/api/projects/${projectId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, constructionPct }),
+      body: JSON.stringify({
+        status,
+        ...(isConstructionRelevant(status) ? { constructionPct } : {}),
+      }),
     });
     setSaving(false);
     const data = await res.json();
@@ -95,42 +108,54 @@ export function ProjectProgressEditor({
         </select>
       </label>
 
-      <label className="block text-sm">
-        <span className="mb-1 flex items-center justify-between font-medium">
-          <span>Construction completion</span>
-          <span className="text-[var(--brand)]">{Math.min(100, Math.max(0, parseInt(pct, 10) || 0))}%</span>
-        </span>
-        <input
-          type="range"
-          min={0}
-          max={100}
-          step={1}
-          className="w-full accent-teal-700"
-          value={Math.min(100, Math.max(0, parseInt(pct, 10) || 0))}
-          onChange={(e) => {
-            setPct(e.target.value);
-            setDirty(true);
-          }}
-        />
-        <input
-          type="number"
-          min={0}
-          max={100}
-          className="input mt-2 w-24"
-          value={pct}
-          onChange={(e) => {
-            setPct(e.target.value);
-            setDirty(true);
-          }}
-        />
-      </label>
+      {showConstruction && (
+        <>
+          <label className="block text-sm">
+            <span className="mb-1 flex items-center justify-between font-medium">
+              <span>Construction completion</span>
+              <span className="text-[var(--brand)]">
+                {Math.min(100, Math.max(0, parseInt(pct, 10) || 0))}%
+              </span>
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              className="w-full accent-teal-700"
+              value={Math.min(100, Math.max(0, parseInt(pct, 10) || 0))}
+              onChange={(e) => {
+                setPct(e.target.value);
+                setDirty(true);
+              }}
+            />
+            <input
+              type="number"
+              min={0}
+              max={100}
+              className="input mt-2 w-24"
+              value={pct}
+              onChange={(e) => {
+                setPct(e.target.value);
+                setDirty(true);
+              }}
+            />
+          </label>
 
-      <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-        <div
-          className="h-full rounded-full bg-teal-600 transition-all"
-          style={{ width: `${Math.min(100, Math.max(0, parseInt(pct, 10) || 0))}%` }}
-        />
-      </div>
+          <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+            <div
+              className="h-full rounded-full bg-teal-600 transition-all"
+              style={{ width: `${Math.min(100, Math.max(0, parseInt(pct, 10) || 0))}%` }}
+            />
+          </div>
+        </>
+      )}
+
+      {!showConstruction && (
+        <p className="text-xs text-[var(--muted)]">
+          Construction progress is hidden for completed / handover projects.
+        </p>
+      )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 

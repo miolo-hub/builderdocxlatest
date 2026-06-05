@@ -151,12 +151,6 @@ export function ProjectProgressEditor({
         </>
       )}
 
-      {!showConstruction && (
-        <p className="text-xs text-[var(--muted)]">
-          Construction progress is hidden for completed / handover projects.
-        </p>
-      )}
-
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <button

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ProjectProgressEditor } from "@/components/portal/ProjectProgressEditor";
 import { PropTrackShell } from "@/components/portal/PropTrackShell";
 import { can, type UserRole } from "@/lib/rbac";
@@ -13,6 +13,18 @@ const STATUS_COLOR: Record<string, string> = {
   sold: "bg-red-100 text-red-800",
   blocked: "bg-slate-200 text-slate-700",
 };
+
+const STATUS_LABEL: Record<string, string> = {
+  available: "Available",
+  reserved: "Reserved",
+  sold: "Sold",
+  blocked: "Blocked",
+  cancelled: "Cancelled",
+};
+
+function normalizeFlatQuery(q: string): string {
+  return q.trim().toLowerCase().replace(/\s+/g, "");
+}
 
 type ProjectMeta = {
   id: string;
@@ -37,6 +49,7 @@ export default function InventoryPage() {
     status: string;
     client: { name: string } | null;
   }[]>([]);
+  const [flatSearch, setFlatSearch] = useState("");
 
   const load = useCallback(async () => {
     const me = await fetch("/api/auth/me");
@@ -57,6 +70,25 @@ export default function InventoryPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const flatQuery = normalizeFlatQuery(flatSearch);
+
+  const filteredUnits = useMemo(() => {
+    if (!flatQuery) return units;
+    return units.filter((u) => {
+      const num = normalizeFlatQuery(u.unitNumber);
+      const block = normalizeFlatQuery(u.block ?? "");
+      return num.includes(flatQuery) || block.includes(flatQuery);
+    });
+  }, [units, flatQuery]);
+
+  const lookupUnit = useMemo(() => {
+    if (!flatQuery) return null;
+    const exact = units.find((u) => normalizeFlatQuery(u.unitNumber) === flatQuery);
+    if (exact) return exact;
+    if (filteredUnits.length === 1) return filteredUnits[0];
+    return null;
+  }, [units, flatQuery, filteredUnits]);
 
   if (!user) return null;
 
@@ -87,12 +119,80 @@ export default function InventoryPage() {
       )}
 
       <h2 className="mb-2 text-lg font-semibold">Inventory grid</h2>
-      <p className="mb-6 text-sm text-[var(--muted)]">
+      <p className="mb-4 text-sm text-[var(--muted)]">
         🟢 Available · 🟡 Reserved · 🔴 Sold · ⚫ Blocked
       </p>
+
+      <div className="mb-6 flex flex-wrap items-end gap-3">
+        <label className="block min-w-[200px] flex-1 text-sm">
+          <span className="mb-1 block font-medium">Check flat availability</span>
+          <input
+            className="input"
+            placeholder="Enter flat number (e.g. A-1204)"
+            value={flatSearch}
+            onChange={(e) => setFlatSearch(e.target.value)}
+          />
+        </label>
+        {flatSearch.trim() && (
+          <button
+            type="button"
+            className="btn-secondary text-sm"
+            onClick={() => setFlatSearch("")}
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
+      {flatQuery && lookupUnit && (
+        <div
+          className={`mb-4 rounded-lg border p-4 ${
+            lookupUnit.status === "available"
+              ? "border-green-200 bg-green-50/80"
+              : lookupUnit.status === "reserved"
+                ? "border-yellow-200 bg-yellow-50/80"
+                : lookupUnit.status === "sold"
+                  ? "border-red-200 bg-red-50/80"
+                  : "border-slate-200 bg-slate-50"
+          }`}
+        >
+          <p className="font-semibold">
+            Flat {lookupUnit.unitNumber} — {STATUS_LABEL[lookupUnit.status] ?? lookupUnit.status}
+          </p>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            {lookupUnit.block ? `${lookupUnit.block} · ` : ""}
+            {lookupUnit.floor ? `Floor ${lookupUnit.floor} · ` : ""}
+            Base ₹{lookupUnit.basePrice.toLocaleString("en-IN")}
+          </p>
+          {lookupUnit.client && (
+            <p className="mt-1 text-sm text-teal-800">Linked to {lookupUnit.client.name}</p>
+          )}
+          {lookupUnit.status === "available" && (
+            <p className="mt-1 text-sm text-green-800">This flat is free to book.</p>
+          )}
+        </div>
+      )}
+
+      {flatQuery && filteredUnits.length === 0 && (
+        <p className="mb-4 text-sm text-amber-800">
+          No flat found matching &ldquo;{flatSearch.trim()}&rdquo; in this project.
+        </p>
+      )}
+
+      {flatQuery && filteredUnits.length > 1 && !lookupUnit && (
+        <p className="mb-4 text-sm text-[var(--muted)]">
+          {filteredUnits.length} flats match &ldquo;{flatSearch.trim()}&rdquo;
+        </p>
+      )}
+
       <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-        {units.map((u) => (
-          <div key={u.id} className="card p-4">
+        {filteredUnits.map((u) => (
+          <div
+            key={u.id}
+            className={`card p-4 ${
+              lookupUnit?.id === u.id ? "ring-2 ring-teal-500 ring-offset-2" : ""
+            }`}
+          >
             <div className="flex items-start justify-between">
               <span className="text-lg font-bold">{u.unitNumber}</span>
               <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[u.status] ?? ""}`}>

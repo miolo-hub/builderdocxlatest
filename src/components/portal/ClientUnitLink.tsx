@@ -111,8 +111,8 @@ export function ClientUnitLink({
     <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
       <p className="mb-2 font-medium">Link flat to inventory</p>
       <p className="mb-3 text-xs text-[var(--muted)]">
-        Required for booked/sold status to show correctly in project inventory (not
-        just the client label).
+        Required for booked/sold status to show correctly in project inventory. A final
+        price (cost breakup or deal) is required before marking as booked.
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block">

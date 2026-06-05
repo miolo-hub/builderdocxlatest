@@ -78,6 +78,7 @@ model Unit {
   areaSqft    Float?    @map("area_sqft")
   facing      String?
   basePrice   Float     @map("base_price")
+  finalPrice  Float?    @map("final_price")
   status      String    @default("available") // available | reserved | sold | blocked | cancelled
   clientId    String?   @map("client_id")
   agentId     String?   @map("agent_id")

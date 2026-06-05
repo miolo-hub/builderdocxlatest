@@ -1,11 +1,30 @@
 import { parseWorkflowData } from "./client-workflow";
 import { getPrisma } from "./prisma";
+import { priceFromBreakup, MIN_REAL_FINAL_PRICE, isValidFinalPrice } from "./unit-final-price";
 
 const LOAN_MODES = new Set(["bank_loan", "bank_disbursement", "loan"]);
 
 function advanceFromWorkflow(workflowData: string | null): number {
   const data = parseWorkflowData(workflowData);
   return data.advance?.amount ?? 0;
+}
+
+function soldUnitExpectedPrice(
+  unit: { basePrice: number; clientId: string | null; finalPrice?: number | null },
+  clientsById: Map<string, { workflowData: string | null }>
+): number {
+  if (isValidFinalPrice(unit.finalPrice)) return unit.finalPrice!;
+  if (unit.clientId) {
+    const client = clientsById.get(unit.clientId);
+    if (client) {
+      const fromPb = priceFromBreakup(
+        parseWorkflowData(client.workflowData).priceBreakup
+      );
+      if (fromPb > 0) return fromPb;
+    }
+  }
+  if (unit.basePrice >= MIN_REAL_FINAL_PRICE) return unit.basePrice;
+  return 0;
 }
 
 function fmtPct(part: number, total: number) {
@@ -44,6 +63,7 @@ function computeProjectRevenue(
     projectId: string;
     status: string;
     basePrice: number;
+    clientId: string | null;
   }[],
   deals: {
     id: string;
@@ -62,6 +82,7 @@ function computeProjectRevenue(
     deals: { id: string }[];
   }[]
 ): ProjectRevenueDetail {
+  const clientsById = new Map(clients.map((c) => [c.id, c]));
   const pUnits = units.filter((u) => u.projectId === projectId);
   const pDeals = deals.filter((d) => d.unit.projectId === projectId);
   const dealUnitIds = new Set(pDeals.map((d) => d.unitId));
@@ -69,7 +90,7 @@ function computeProjectRevenue(
   let expectedRevenue = pDeals.reduce((s, d) => s + d.finalPrice, 0);
   for (const u of pUnits) {
     if (u.status === "sold" && !dealUnitIds.has(u.id)) {
-      expectedRevenue += u.basePrice;
+      expectedRevenue += soldUnitExpectedPrice(u, clientsById);
     }
   }
 
@@ -140,7 +161,7 @@ export async function getDashboardMetrics(builderId: string, projectId?: string)
       prisma.project.findMany({ where: { builderId }, orderBy: { name: "asc" } }),
       prisma.unit.findMany({
         where: { project: { builderId } },
-        select: { id: true, projectId: true, status: true, basePrice: true },
+        select: { id: true, projectId: true, status: true, basePrice: true, finalPrice: true, clientId: true },
       }),
       prisma.client.count({ where: { builderId } }),
       prisma.deal.findMany({

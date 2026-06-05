@@ -1,4 +1,8 @@
 import type { Prisma } from "@/generated/prisma/client";
+import {
+  assertFinalPriceForClient,
+  clientStageRequiresFinalPrice,
+} from "./unit-final-price";
 import { getPrisma } from "./prisma";
 
 type Tx = Prisma.TransactionClient;
@@ -103,6 +107,7 @@ async function releaseAllClientInventory(tx: Tx, clientId: string) {
         status: "available",
         clientId: null,
         bookingDate: null,
+        finalPrice: null,
       },
     });
     await tx.deal.update({
@@ -117,6 +122,7 @@ async function releaseAllClientInventory(tx: Tx, clientId: string) {
       status: "available",
       clientId: null,
       bookingDate: null,
+      finalPrice: null,
     },
   });
 }
@@ -148,6 +154,7 @@ async function releaseClientUnitsWithoutDeal(
         status: "available",
         clientId: null,
         bookingDate: null,
+        finalPrice: null,
       },
     });
   }
@@ -227,6 +234,11 @@ export async function syncClientInventoryForStage(
       );
     }
 
+    let finalPrice: number | undefined;
+    if (targetStatus === "sold" || clientStageRequiresFinalPrice(newStage)) {
+      finalPrice = await assertFinalPriceForClient(tx, clientId, unit.id);
+    }
+
     await tx.unit.update({
       where: { id: unit.id },
       data: {
@@ -236,6 +248,7 @@ export async function syncClientInventoryForStage(
           targetStatus === "sold" || targetStatus === "reserved"
             ? new Date()
             : unit.bookingDate,
+        ...(finalPrice !== undefined ? { finalPrice } : {}),
       },
     });
 

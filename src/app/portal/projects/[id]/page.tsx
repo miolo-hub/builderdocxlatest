@@ -33,6 +33,7 @@ export default function InventoryPage() {
     floor: string | null;
     block: string | null;
     basePrice: number;
+    finalPrice: number | null;
     status: string;
     client: { name: string } | null;
   }[]>([]);
@@ -105,7 +106,14 @@ export default function InventoryPage() {
               ₹{(u.basePrice / 100000).toFixed(1)}L
             </p>
             {u.client && (
-              <p className="mt-1 text-xs text-teal-800">{u.client.name}</p>
+              <>
+                <p className="mt-1 text-xs text-teal-800">{u.client.name}</p>
+                {u.status === "sold" && u.finalPrice != null && u.finalPrice > 0 && (
+                  <p className="text-xs font-semibold text-teal-900">
+                    Final: ₹{u.finalPrice.toLocaleString("en-IN")}
+                  </p>
+                )}
+              </>
             )}
           </div>
         ))}

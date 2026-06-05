@@ -77,6 +77,7 @@ export async function POST(request: Request) {
         clientId: body.clientId,
         agentId: body.agentId,
         bookingDate: new Date(),
+        finalPrice,
       },
     });
 
@@ -85,7 +86,7 @@ export async function POST(request: Request) {
         clientId: body.clientId,
         id: { not: body.unitId },
       },
-      data: { status: "available", clientId: null, bookingDate: null },
+      data: { status: "available", clientId: null, bookingDate: null, finalPrice: null },
     });
 
     await tx.client.update({

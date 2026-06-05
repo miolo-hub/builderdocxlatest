@@ -9,6 +9,7 @@ import { getTemplate, templateFieldsFromRecord } from "@/lib/templates-db";
 import { getPrisma } from "@/lib/prisma";
 import { createSignedUrl } from "@/lib/signed-url";
 import { generateId } from "@/lib/store";
+import { isValidFinalPrice, priceFromBreakup } from "@/lib/unit-final-price";
 
 export async function POST(
   request: Request,
@@ -113,6 +114,42 @@ export async function POST(
       stage: client.stage === "prospect" ? "interested" : client.stage,
     },
   });
+
+  const breakupTotal = priceFromBreakup(data.priceBreakup);
+  if (isValidFinalPrice(breakupTotal)) {
+    let targetUnitId = client.preferredUnitId;
+    if (!targetUnitId) {
+      const projectName = values.projectName
+        ? String(values.projectName)
+        : client.projectName;
+      const unitNo = values.unitNo ? String(values.unitNo) : client.unit;
+      if (projectName?.trim() && unitNo?.trim()) {
+        const projects = await getPrisma().project.findMany({
+          where: { builderId: user!.builderId },
+          select: { id: true, name: true },
+        });
+        const project = projects.find(
+          (p) => p.name.toLowerCase() === projectName.trim().toLowerCase()
+        );
+        if (project) {
+          const matched = await getPrisma().unit.findFirst({
+            where: {
+              projectId: project.id,
+              unitNumber: { equals: unitNo.trim(), mode: "insensitive" },
+            },
+            select: { id: true },
+          });
+          targetUnitId = matched?.id ?? null;
+        }
+      }
+    }
+    if (targetUnitId) {
+      await getPrisma().unit.update({
+        where: { id: targetUnitId },
+        data: { finalPrice: breakupTotal },
+      });
+    }
+  }
 
   await getPrisma().activityLog.create({
     data: {

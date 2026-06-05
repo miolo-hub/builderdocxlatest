@@ -17,9 +17,10 @@ model Builder {
   email           String?
   supportHours    String?  @map("support_hours")
   whatsappDemoOtp String?  @map("whatsapp_demo_otp")
-  priceBreakupFieldConfig String? @map("price_breakup_field_config")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
+
+  templates DocumentTemplate[]
 
   @@map("builders")
 }
@@ -109,6 +110,24 @@ model ConstructionMilestone {
 
   @@index([projectId])
   @@map("construction_milestones")
+}
+
+model DocumentTemplate {
+  id          String   @id
+  builderId   String?  @map("builder_id")
+  category    String   // cost_breakup | payment_receipt
+  name        String
+  description String?
+  isSystem    Boolean  @default(false) @map("is_system")
+  fieldConfig String   @map("field_config")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  builder Builder? @relation(fields: [builderId], references: [id])
+
+  @@index([builderId])
+  @@index([category])
+  @@map("document_templates")
 }
 
 // ─── Clients (buyers) ─────────────────────────────────────────

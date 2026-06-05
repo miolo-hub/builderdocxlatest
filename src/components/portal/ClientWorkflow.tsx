@@ -8,7 +8,7 @@ import {
   parseWorkflowData,
   type ClientWorkflowData,
 } from "@/lib/client-workflow";
-import { PriceBreakupModal } from "./PriceBreakupModal";
+import { TemplateGenerateModal } from "./TemplateGenerateModal";
 
 interface ClientWorkflowProps {
   clientId: string;
@@ -30,10 +30,7 @@ export function ClientWorkflow({
   const data = parseWorkflowData(workflowDataRaw);
   const activeStep = getActiveWorkflowStep(workflowStep, data);
   const [showBreakup, setShowBreakup] = useState(false);
-  const [advanceOpen, setAdvanceOpen] = useState(false);
-  const [amount, setAmount] = useState("");
-  const [mode, setMode] = useState("bank_transfer");
-  const [reference, setReference] = useState("");
+  const [showReceipt, setShowReceipt] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -43,26 +40,6 @@ export function ClientWorkflow({
       const { downloadUrl } = await res.json();
       window.open(downloadUrl, "_blank");
     }
-  }
-
-  async function recordAdvance(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    setError("");
-    const res = await fetch(`/api/clients/${clientId}/workflow/advance-receipt`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount, mode, reference }),
-    });
-    setSaving(false);
-    const json = await res.json();
-    if (!res.ok) {
-      setError(json.error ?? "Failed");
-      return;
-    }
-    setAdvanceOpen(false);
-    window.open(json.downloadUrl, "_blank");
-    onUpdated();
   }
 
   async function workflowAction(body: Record<string, unknown>) {
@@ -133,7 +110,7 @@ export function ClientWorkflow({
                       <button
                         type="button"
                         className="btn-primary text-sm"
-                        onClick={() => setAdvanceOpen(true)}
+                        onClick={() => setShowReceipt(true)}
                       >
                         Record paid advance & receipt
                       </button>
@@ -146,7 +123,7 @@ export function ClientWorkflow({
                     className="mt-2 text-sm text-teal-700 hover:underline"
                     onClick={() => void openDocDownload(data.advance!.documentId!)}
                   >
-                    Download advance receipt (₹{data.advance.amount.toLocaleString("en-IN")})
+                    Download advance receipt (Rs. {data.advance.amount.toLocaleString("en-IN")})
                   </button>
                 )}
                 {step.id === "awaiting_decision" &&
@@ -250,9 +227,10 @@ export function ClientWorkflow({
 
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
 
-      <PriceBreakupModal
+      <TemplateGenerateModal
         open={showBreakup}
         clientId={clientId}
+        category="cost_breakup"
         onClose={() => setShowBreakup(false)}
         onGenerated={(url) => {
           window.open(url, "_blank");
@@ -260,55 +238,16 @@ export function ClientWorkflow({
         }}
       />
 
-      {advanceOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="card w-full max-w-md p-6">
-            <h2 className="mb-4 text-lg font-bold">Paid advance — {clientName}</h2>
-            <form onSubmit={recordAdvance} className="space-y-3">
-              <label className="block text-sm">
-                <span className="mb-1 block font-medium">Amount (₹) *</span>
-                <input
-                  className="input"
-                  type="number"
-                  min="1"
-                  required
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                />
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1 block font-medium">Payment mode</span>
-                <select className="input" value={mode} onChange={(e) => setMode(e.target.value)}>
-                  <option value="bank_transfer">Bank transfer</option>
-                  <option value="cheque">Cheque</option>
-                  <option value="cash">Cash</option>
-                  <option value="upi">UPI</option>
-                </select>
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1 block font-medium">Reference / UTR</span>
-                <input
-                  className="input"
-                  value={reference}
-                  onChange={(e) => setReference(e.target.value)}
-                />
-              </label>
-              <div className="flex gap-3 pt-2">
-                <button type="submit" className="btn-primary flex-1" disabled={saving}>
-                  {saving ? "Saving…" : "Create receipt PDF"}
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setAdvanceOpen(false)}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <TemplateGenerateModal
+        open={showReceipt}
+        clientId={clientId}
+        category="payment_receipt"
+        onClose={() => setShowReceipt(false)}
+        onGenerated={(url) => {
+          window.open(url, "_blank");
+          onUpdated();
+        }}
+      />
     </div>
   );
 }

@@ -16,9 +16,9 @@ const NAV = [
 ];
 
 const SETTINGS_NAV = {
-  href: "/portal/settings/price-breakup",
-  label: "Price breakup fields",
-  icon: "⚙️",
+  href: "/portal/templates",
+  label: "Templates",
+  icon: "📄",
 };
 
 interface PropTrackShellProps {

@@ -3,7 +3,9 @@ import { requireUser } from "@/lib/api-auth";
 import { parseWorkflowData } from "@/lib/client-workflow";
 import { getClientById } from "@/lib/clients-db";
 import { storeDocumentBytes } from "@/lib/document-storage";
-import { generateAdvanceReceiptPdf } from "@/lib/pdf-documents";
+import { generateTemplatePdf } from "@/lib/pdf-documents";
+import { applyTemplateCalculations } from "@/lib/template-calculations";
+import { getTemplate, templateFieldsFromRecord } from "@/lib/templates-db";
 import { getPrisma } from "@/lib/prisma";
 import { createSignedUrl } from "@/lib/signed-url";
 import { generateId } from "@/lib/store";
@@ -14,17 +16,31 @@ export async function POST(
 ) {
   const { user, error } = await requireUser("clients.manage");
   if (error) return error;
-  const { id } = await params;
+  const { id: clientId } = await params;
   const body = await request.json();
 
-  const amount = parseFloat(String(body.amount ?? ""));
-  if (Number.isNaN(amount) || amount <= 0) {
-    return NextResponse.json({ error: "Valid advance amount required" }, { status: 400 });
+  const templateId = String(body.templateId ?? "");
+  const rawValues = body.values as Record<string, string> | undefined;
+  if (!templateId || !rawValues) {
+    return NextResponse.json({ error: "templateId and values required" }, { status: 400 });
   }
 
-  const client = await getClientById(id, user!.builderId);
+  const template = await getTemplate(templateId, user!.builderId);
+  if (!template || template.category !== "payment_receipt") {
+    return NextResponse.json({ error: "Payment receipt template not found" }, { status: 404 });
+  }
+
+  const fields = templateFieldsFromRecord(template);
+  const values = applyTemplateCalculations(fields, rawValues);
+
+  const amount = parseFloat(String(values.amount ?? ""));
+  if (Number.isNaN(amount) || amount <= 0) {
+    return NextResponse.json({ error: "Valid amount is required" }, { status: 400 });
+  }
+
+  const client = await getClientById(clientId, user!.builderId);
   if (!client) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
 
   const data = parseWorkflowData(client.workflowData);
@@ -35,30 +51,36 @@ export async function POST(
     );
   }
 
-  const paidAt = body.paidAt ? new Date(body.paidAt).toISOString() : new Date().toISOString();
-  const mode = String(body.mode ?? "bank_transfer");
-  const reference = body.reference ? String(body.reference) : undefined;
+  const paidAt = values.paidAt
+    ? new Date(values.paidAt).toISOString()
+    : new Date().toISOString();
+  const mode = values.mode ?? "Bank transfer";
+  const reference = values.reference?.trim() || undefined;
 
   const builder = await getPrisma().builder.findUnique({
     where: { id: user!.builderId },
     select: { name: true },
   });
 
-  const pb = data.priceBreakup;
-  const pdfBytes = await generateAdvanceReceiptPdf(builder?.name ?? "Builder", client.name, {
-    amount,
-    mode,
-    reference,
-    paidAt,
-    projectName: String(pb.projectName ?? client.projectName ?? ""),
-    flatNumber: String(pb.flatNumber ?? client.unit ?? ""),
-    tower: String(pb.tower ?? client.tower ?? ""),
-  });
+  let pdfBytes: Uint8Array;
+  try {
+    pdfBytes = await generateTemplatePdf(
+      builder?.name ?? "Builder",
+      client.name,
+      template.name,
+      fields,
+      { ...values, paidAt: paidAt.slice(0, 10) },
+      template.id
+    );
+  } catch (err) {
+    console.error("Receipt PDF failed:", err);
+    return NextResponse.json({ error: "PDF generation failed" }, { status: 500 });
+  }
 
-  const fileName = `advance-receipt-${client.name.replace(/\s+/g, "-")}.pdf`;
+  const fileName = `receipt-${client.name.replace(/[^a-zA-Z0-9.-]/g, "-")}.pdf`;
   const filePath = await storeDocumentBytes(
     user!.builderId,
-    id,
+    clientId,
     fileName,
     Buffer.from(pdfBytes),
     "application/pdf"
@@ -68,9 +90,9 @@ export async function POST(
     data: {
       id: generateId("doc"),
       builderId: user!.builderId,
-      clientId: id,
+      clientId,
       type: "payment_receipt",
-      title: "Advance Payment Receipt",
+      title: `${template.name} — ${client.name}`,
       fileName,
       filePath,
       mimeType: "application/pdf",
@@ -86,10 +108,12 @@ export async function POST(
     reference,
     paidAt,
     documentId: doc.id,
+    templateId: template.id,
+    templateName: template.name,
   };
 
   await getPrisma().client.update({
-    where: { id },
+    where: { id: clientId },
     data: {
       workflowStep: "advance_paid",
       workflowData: JSON.stringify(data),
@@ -103,9 +127,9 @@ export async function POST(
     data: {
       id: generateId("act"),
       builderId: user!.builderId,
-      clientId: id,
+      clientId,
       type: "document.generated",
-      description: `Advance receipt (₹${amount.toLocaleString("en-IN")}) for ${client.name}`,
+      description: `${template.name} (Rs. ${amount.toLocaleString("en-IN")}) for ${client.name}`,
       actor: user!.name,
     },
   });

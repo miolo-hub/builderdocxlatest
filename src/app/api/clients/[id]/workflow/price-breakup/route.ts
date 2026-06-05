@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/api-auth";
-import { getPriceBreakupFields } from "@/lib/builder-settings";
 import { parseWorkflowData } from "@/lib/client-workflow";
 import { getClientById } from "@/lib/clients-db";
 import { storeDocumentBytes } from "@/lib/document-storage";
-import { generatePriceBreakupPdf } from "@/lib/pdf-documents";
+import { generateTemplatePdf } from "@/lib/pdf-documents";
+import { applyTemplateCalculations } from "@/lib/template-calculations";
+import { getTemplate, templateFieldsFromRecord } from "@/lib/templates-db";
 import { getPrisma } from "@/lib/prisma";
 import { createSignedUrl } from "@/lib/signed-url";
 import { generateId } from "@/lib/store";
@@ -15,26 +16,34 @@ export async function POST(
 ) {
   const { user, error } = await requireUser("clients.manage");
   if (error) return error;
-  const { id } = await params;
+  const { id: clientId } = await params;
   const body = await request.json();
-  const values = body.values as Record<string, string> | undefined;
-  if (!values || typeof values !== "object") {
-    return NextResponse.json({ error: "values required" }, { status: 400 });
+
+  const templateId = String(body.templateId ?? "");
+  const rawValues = body.values as Record<string, string> | undefined;
+  if (!templateId || !rawValues) {
+    return NextResponse.json({ error: "templateId and values required" }, { status: 400 });
   }
 
-  const client = await getClientById(id, user!.builderId);
-  if (!client) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const template = await getTemplate(templateId, user!.builderId);
+  if (!template || template.category !== "cost_breakup") {
+    return NextResponse.json({ error: "Cost breakup template not found" }, { status: 404 });
   }
 
-  const fields = await getPriceBreakupFields(user!.builderId);
+  const fields = templateFieldsFromRecord(template);
+  const values = applyTemplateCalculations(fields, rawValues);
+
   for (const f of fields) {
-    if (f.required && !String(values[f.key] ?? "").trim()) {
-      return NextResponse.json(
-        { error: `${f.label} is required` },
-        { status: 400 }
-      );
+    if (f.required && f.type !== "section" && f.type !== "computed") {
+      if (!String(values[f.key] ?? "").trim()) {
+        return NextResponse.json({ error: `${f.label} is required` }, { status: 400 });
+      }
     }
+  }
+
+  const client = await getClientById(clientId, user!.builderId);
+  if (!client) {
+    return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
 
   const builder = await getPrisma().builder.findUnique({
@@ -42,17 +51,28 @@ export async function POST(
     select: { name: true },
   });
 
-  const pdfBytes = await generatePriceBreakupPdf(
-    builder?.name ?? "Builder",
-    client.name,
-    fields,
-    values
-  );
+  let pdfBytes: Uint8Array;
+  try {
+    pdfBytes = await generateTemplatePdf(
+      builder?.name ?? "Builder",
+      client.name,
+      template.name,
+      fields,
+      values,
+      template.id
+    );
+  } catch (err) {
+    console.error("PDF generation failed:", err);
+    return NextResponse.json(
+      { error: "PDF generation failed. Check field values for unsupported characters." },
+      { status: 500 }
+    );
+  }
 
-  const fileName = `price-breakup-${client.name.replace(/\s+/g, "-")}.pdf`;
+  const fileName = `cost-breakup-${client.name.replace(/[^a-zA-Z0-9.-]/g, "-")}.pdf`;
   const filePath = await storeDocumentBytes(
     user!.builderId,
-    id,
+    clientId,
     fileName,
     Buffer.from(pdfBytes),
     "application/pdf"
@@ -62,9 +82,9 @@ export async function POST(
     data: {
       id: generateId("doc"),
       builderId: user!.builderId,
-      clientId: id,
+      clientId,
       type: "price_breakup",
-      title: "Price Breakup Letter",
+      title: `${template.name} — ${client.name}`,
       fileName,
       filePath,
       mimeType: "application/pdf",
@@ -75,17 +95,20 @@ export async function POST(
   });
 
   const data = parseWorkflowData(client.workflowData);
-  data.priceBreakup = { ...values, documentId: doc.id };
+  data.priceBreakup = {
+    ...values,
+    templateId: template.id,
+    templateName: template.name,
+    documentId: doc.id,
+  };
 
   await getPrisma().client.update({
-    where: { id },
+    where: { id: clientId },
     data: {
       workflowStep: "price_breakup_done",
       workflowData: JSON.stringify(data),
-      projectName: values.projectName
-        ? String(values.projectName)
-        : client.projectName,
-      unit: values.flatNumber ? String(values.flatNumber) : client.unit,
+      projectName: values.projectName ? String(values.projectName) : client.projectName,
+      unit: values.unitNo ? String(values.unitNo) : client.unit,
       tower: values.tower ? String(values.tower) : client.tower,
       stage: client.stage === "prospect" ? "interested" : client.stage,
     },
@@ -95,9 +118,9 @@ export async function POST(
     data: {
       id: generateId("act"),
       builderId: user!.builderId,
-      clientId: id,
+      clientId,
       type: "document.generated",
-      description: `Price breakup generated for ${client.name}`,
+      description: `${template.name} generated for ${client.name}`,
       actor: user!.name,
     },
   });

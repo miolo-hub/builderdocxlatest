@@ -16,6 +16,8 @@ export type ClientWorkflowData = {
     reference?: string;
     paidAt: string;
     documentId?: string;
+    templateId?: string;
+    templateName?: string;
   };
   decision?: "proceed" | "cancelled";
   advanceRefunded?: boolean | null;

@@ -13,6 +13,8 @@ type ProjectRow = {
   id: string;
   name: string;
   location: string;
+  websiteUrl: string | null;
+  logoUrl: string | null;
   status: string;
   constructionPct: number;
   _count: { units: number };
@@ -120,13 +122,32 @@ export default function ProjectsPage() {
           {projects.map((p) => (
             <div key={p.id} className="card relative p-5">
               <Link href={`/portal/projects/${p.id}`} className="block hover:border-teal-300">
-                <h2 className="font-semibold pr-16">{p.name}</h2>
-                <p className="text-sm text-[var(--muted)]">{p.location || "—"}</p>
-                <p className="mt-1 text-xs text-[var(--muted)]">
-                  <strong>{p._count.units}</strong> units · 🟢 {p.unitCounts.available} avail · 🟡{" "}
-                  {p.unitCounts.reserved} reserved · 🔴 {p.unitCounts.sold} sold · ⚫{" "}
-                  {p.unitCounts.blocked} blocked
-                </p>
+                <div className="flex items-start gap-3 pr-16">
+                  {p.logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={p.logoUrl}
+                      alt=""
+                      className="h-10 w-10 shrink-0 rounded-md border border-slate-200 object-contain bg-white"
+                    />
+                  ) : (
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-slate-100 text-xs font-semibold text-slate-500">
+                      {p.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <h2 className="font-semibold">{p.name}</h2>
+                    <p className="text-sm text-[var(--muted)]">{p.location || "—"}</p>
+                    {p.websiteUrl && (
+                      <p className="mt-0.5 truncate text-xs text-teal-700">{p.websiteUrl}</p>
+                    )}
+                    <p className="mt-1 text-xs text-[var(--muted)]">
+                      <strong>{p._count.units}</strong> units · 🟢 {p.unitCounts.available} avail · 🟡{" "}
+                      {p.unitCounts.reserved} reserved · 🔴 {p.unitCounts.sold} sold · ⚫{" "}
+                      {p.unitCounts.blocked} blocked
+                    </p>
+                  </div>
+                </div>
               </Link>
               <div className="mt-3 border-t border-slate-100 pt-3">
                 <ProjectProgressEditor

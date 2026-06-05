@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/api-auth";
 import { PROJECT_STATUSES } from "@/lib/constants";
+import { parseWebsiteUrl, resolveProjectAssetUrl } from "@/lib/project-storage";
 import { getPrisma } from "@/lib/prisma";
 import { generateId } from "@/lib/store";
 
@@ -23,6 +24,8 @@ export async function GET(
       constructionPct: true,
       totalUnits: true,
       possessionDate: true,
+      websiteUrl: true,
+      logoPath: true,
     },
   });
 
@@ -30,7 +33,12 @@ export async function GET(
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ project });
+  return NextResponse.json({
+    project: {
+      ...project,
+      logoUrl: resolveProjectAssetUrl(project.logoPath),
+    },
+  });
 }
 
 export async function PATCH(
@@ -51,7 +59,33 @@ export async function PATCH(
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
 
-  const data: { status?: string; constructionPct?: number } = {};
+  const data: {
+    status?: string;
+    constructionPct?: number;
+    name?: string;
+    location?: string;
+    websiteUrl?: string | null;
+  } = {};
+
+  if (body.name !== undefined) {
+    const name = String(body.name).trim();
+    if (!name) {
+      return NextResponse.json({ error: "Project name cannot be empty" }, { status: 400 });
+    }
+    data.name = name;
+  }
+
+  if (body.location !== undefined) {
+    data.location = String(body.location).trim();
+  }
+
+  if (body.websiteUrl !== undefined) {
+    const websiteUrl = parseWebsiteUrl(body.websiteUrl);
+    if (String(body.websiteUrl).trim() && websiteUrl === null) {
+      return NextResponse.json({ error: "Enter a valid http or https website URL" }, { status: 400 });
+    }
+    data.websiteUrl = websiteUrl ?? null;
+  }
 
   if (body.status !== undefined) {
     const status = String(body.status).trim();
@@ -82,12 +116,18 @@ export async function PATCH(
     select: {
       id: true,
       name: true,
+      location: true,
       status: true,
       constructionPct: true,
+      websiteUrl: true,
+      logoPath: true,
     },
   });
 
   const parts: string[] = [];
+  if (data.name) parts.push("name updated");
+  if (data.location !== undefined) parts.push("location updated");
+  if (data.websiteUrl !== undefined) parts.push("website updated");
   if (data.status) parts.push(`status → ${data.status}`);
   if (data.constructionPct !== undefined) {
     parts.push(`construction ${data.constructionPct}%`);
@@ -103,7 +143,12 @@ export async function PATCH(
     },
   });
 
-  return NextResponse.json({ project });
+  return NextResponse.json({
+    project: {
+      ...project,
+      logoUrl: resolveProjectAssetUrl(project.logoPath),
+    },
+  });
 }
 
 export async function DELETE(

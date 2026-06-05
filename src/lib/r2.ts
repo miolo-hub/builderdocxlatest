@@ -51,6 +51,15 @@ export function buildProjectBrochureKey(
   return `projects/${builderId}/${projectId}/${Date.now()}-${safe}`;
 }
 
+export function buildProjectLogoKey(
+  builderId: string,
+  projectId: string,
+  fileName: string
+): string {
+  const safe = fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
+  return `projects/${builderId}/${projectId}/logo/${Date.now()}-${safe}`;
+}
+
 export function buildObjectKey(
   builderId: string,
   customerId: string,

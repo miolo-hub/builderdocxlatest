@@ -6,6 +6,7 @@ import {
   parseInventorySpreadsheet,
   type UnitSeed,
 } from "@/lib/inventory-import";
+import { parseWebsiteUrl, resolveProjectAssetUrl } from "@/lib/project-storage";
 import { getPrisma } from "@/lib/prisma";
 import { generateId } from "@/lib/store";
 import type { PortalUserPublic } from "@/lib/users-db";
@@ -27,6 +28,7 @@ async function createProjectWithUnits(
     type: string;
     status: string;
     constructionPct: number;
+    websiteUrl?: string | null;
   },
   units: UnitSeed[]
 ) {
@@ -45,6 +47,7 @@ async function createProjectWithUnits(
         totalUnits: units.length,
         status: meta.status,
         constructionPct: meta.constructionPct,
+        websiteUrl: meta.websiteUrl ?? null,
       },
     });
 
@@ -72,6 +75,7 @@ async function createProjectWithUnits(
   const { units: unitRows, ...rest } = project;
   return {
     ...rest,
+    logoUrl: resolveProjectAssetUrl(rest.logoPath),
     unitCounts: unitCountsFromUnits(unitRows),
   };
 }
@@ -107,6 +111,7 @@ export async function GET(request: Request) {
 
   const payload = projects.map(({ units, ...p }) => ({
     ...p,
+    logoUrl: resolveProjectAssetUrl(p.logoPath),
     unitCounts: unitCountsFromUnits(units),
   }));
 
@@ -135,6 +140,13 @@ export async function POST(request: Request) {
       const buffer = Buffer.from(await file.arrayBuffer());
       const units = parseInventorySpreadsheet(buffer);
 
+      const websiteRaw = form.get("websiteUrl");
+      const websiteUrl =
+        websiteRaw !== null ? parseWebsiteUrl(String(websiteRaw)) : undefined;
+      if (websiteRaw !== null && String(websiteRaw).trim() && websiteUrl === null) {
+        return NextResponse.json({ error: "Enter a valid http or https website URL" }, { status: 400 });
+      }
+
       const project = await createProjectWithUnits(
         user!,
         {
@@ -143,6 +155,7 @@ export async function POST(request: Request) {
           type: String(form.get("type") ?? "residential"),
           status: String(form.get("status") ?? "active"),
           constructionPct: parseInt(String(form.get("constructionPct") ?? 0), 10) || 0,
+          websiteUrl: websiteUrl ?? null,
         },
         units
       );
@@ -176,6 +189,11 @@ export async function POST(request: Request) {
       defaultBasePrice: parseFloat(String(body.defaultBasePrice ?? 0)) || 0,
     });
 
+    const websiteUrl = parseWebsiteUrl(body.websiteUrl);
+    if (body.websiteUrl !== undefined && String(body.websiteUrl).trim() && websiteUrl === null) {
+      return NextResponse.json({ error: "Enter a valid http or https website URL" }, { status: 400 });
+    }
+
     const project = await createProjectWithUnits(
       user!,
       {
@@ -184,6 +202,7 @@ export async function POST(request: Request) {
         type: body.type ?? "residential",
         status: body.status ?? "active",
         constructionPct: parseInt(String(body.constructionPct ?? 0), 10) || 0,
+        websiteUrl: websiteUrl ?? null,
       },
       units
     );

@@ -24,6 +24,8 @@ export function AddProjectModal({ open, onClose, onCreated }: AddProjectModalPro
   const [defaultBasePrice, setDefaultBasePrice] = useState("");
   const [constructionPct, setConstructionPct] = useState("0");
   const [excelFile, setExcelFile] = useState<File | null>(null);
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [logoFile, setLogoFile] = useState<File | null>(null);
   const [brochureFile, setBrochureFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -54,6 +56,8 @@ export function AddProjectModal({ open, onClose, onCreated }: AddProjectModalPro
     setDefaultBasePrice("");
     setConstructionPct("0");
     setExcelFile(null);
+    setWebsiteUrl("");
+    setLogoFile(null);
     setBrochureFile(null);
     setError("");
   }
@@ -63,6 +67,13 @@ export function AddProjectModal({ open, onClose, onCreated }: AddProjectModalPro
     const form = new FormData();
     form.append("file", brochureFile);
     await fetch(`/api/projects/${projectId}/brochure`, { method: "POST", body: form });
+  }
+
+  async function uploadLogo(projectId: string) {
+    if (!logoFile) return;
+    const form = new FormData();
+    form.append("file", logoFile);
+    await fetch(`/api/projects/${projectId}/logo`, { method: "POST", body: form });
   }
 
   async function handleTowerSubmit(e: React.FormEvent) {
@@ -86,6 +97,7 @@ export function AddProjectModal({ open, onClose, onCreated }: AddProjectModalPro
         flatsPerFloor,
         defaultBasePrice,
         constructionPct,
+        websiteUrl: websiteUrl.trim() || undefined,
       }),
     });
     setLoading(false);
@@ -94,7 +106,9 @@ export function AddProjectModal({ open, onClose, onCreated }: AddProjectModalPro
       setError(data.error ?? "Failed to create project");
       return;
     }
-    if (data.project?.id) await uploadBrochure(data.project.id);
+    if (data.project?.id) {
+      await Promise.all([uploadBrochure(data.project.id), uploadLogo(data.project.id)]);
+    }
     reset();
     onCreated();
     onClose();
@@ -114,6 +128,7 @@ export function AddProjectModal({ open, onClose, onCreated }: AddProjectModalPro
     form.append("type", type);
     form.append("status", status);
     form.append("constructionPct", constructionPct);
+    if (websiteUrl.trim()) form.append("websiteUrl", websiteUrl.trim());
     form.append("file", excelFile);
 
     const res = await fetch("/api/projects", { method: "POST", body: form });
@@ -123,7 +138,9 @@ export function AddProjectModal({ open, onClose, onCreated }: AddProjectModalPro
       setError(data.error ?? "Import failed");
       return;
     }
-    if (data.project?.id) await uploadBrochure(data.project.id);
+    if (data.project?.id) {
+      await Promise.all([uploadBrochure(data.project.id), uploadLogo(data.project.id)]);
+    }
     reset();
     onCreated();
     onClose();
@@ -186,6 +203,28 @@ export function AddProjectModal({ open, onClose, onCreated }: AddProjectModalPro
               />
             </label>
           </div>
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium">Project website (optional)</span>
+            <input
+              type="url"
+              className="input"
+              placeholder="https://example.com"
+              value={websiteUrl}
+              onChange={(e) => setWebsiteUrl(e.target.value)}
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium">Project logo (optional)</span>
+            <input
+              type="file"
+              className="input"
+              accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+              onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
+            />
+            <span className="mt-1 block text-xs text-[var(--muted)]">
+              PNG, JPG, WebP, GIF, or SVG — shown on project cards.
+            </span>
+          </label>
           <label className="block text-sm">
             <span className="mb-1 block font-medium">Project brochure (optional)</span>
             <input

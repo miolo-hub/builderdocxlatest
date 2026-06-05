@@ -58,6 +58,8 @@ model Project {
   constructionPct  Int       @default(0) @map("construction_pct")
   possessionDate   DateTime? @map("possession_date")
   brochurePath     String?   @map("brochure_path")
+  websiteUrl       String?   @map("website_url")
+  logoPath         String?   @map("logo_path")
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 

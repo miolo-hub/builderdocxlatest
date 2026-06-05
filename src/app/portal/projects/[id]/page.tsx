@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ProjectProgressEditor } from "@/components/portal/ProjectProgressEditor";
+import { ProjectSettingsEditor } from "@/components/portal/ProjectSettingsEditor";
 import { VikrayaShell } from "@/components/portal/VikrayaShell";
 import { can, type UserRole } from "@/lib/rbac";
 
@@ -32,6 +33,8 @@ type ProjectMeta = {
   location: string;
   status: string;
   constructionPct: number;
+  websiteUrl: string | null;
+  logoUrl: string | null;
 };
 
 export default function InventoryPage() {
@@ -102,11 +105,42 @@ export default function InventoryPage() {
 
       {project && (
         <>
-          <h1 className="text-2xl font-bold">{project.name}</h1>
-          {project.location && (
-            <p className="mb-4 text-sm text-[var(--muted)]">{project.location}</p>
-          )}
-          <div className="mb-6 max-w-md">
+          <div className="mb-4 flex items-start gap-4">
+            {project.logoUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={project.logoUrl}
+                alt={`${project.name} logo`}
+                className="h-14 w-14 shrink-0 rounded-lg border border-slate-200 object-contain bg-white"
+              />
+            )}
+            <div>
+              <h1 className="text-2xl font-bold">{project.name}</h1>
+              {project.location && (
+                <p className="text-sm text-[var(--muted)]">{project.location}</p>
+              )}
+              {project.websiteUrl && (
+                <a
+                  href={project.websiteUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 inline-block text-sm text-teal-700 hover:underline"
+                >
+                  {project.websiteUrl}
+                </a>
+              )}
+            </div>
+          </div>
+          <div className="mb-6 grid max-w-2xl gap-4 md:grid-cols-2">
+            <ProjectSettingsEditor
+              projectId={project.id}
+              name={project.name}
+              location={project.location}
+              websiteUrl={project.websiteUrl}
+              logoUrl={project.logoUrl}
+              canEdit={canEditProgress}
+              onUpdated={() => void load()}
+            />
             <ProjectProgressEditor
               projectId={project.id}
               status={project.status}

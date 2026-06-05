@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AgentSearchSelect, type AgentOption } from "@/components/portal/AgentSearchSelect";
 import { CLIENT_STAGE_LABELS, CLIENT_STAGES } from "@/lib/constants";
 
 interface AddCustomerModalProps {
@@ -33,20 +34,35 @@ export function AddCustomerModal({
   const [stage, setStage] = useState("prospect");
   const [projectId, setProjectId] = useState("");
   const [unitId, setUnitId] = useState("");
+  const [agentId, setAgentId] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
   const [units, setUnits] = useState<UnitOption[]>([]);
+  const [agents, setAgents] = useState<AgentOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!open) return;
-    void fetch("/api/projects")
-      .then((res) => res.json())
-      .then((data) => {
-        const list = (data.projects ?? []) as Project[];
-        setProjects(list);
-        if (list.length === 1) setProjectId(list[0].id);
-      });
+    void Promise.all([fetch("/api/projects"), fetch("/api/agents")]).then(
+      async ([projRes, agentRes]) => {
+        if (projRes.ok) {
+          const data = await projRes.json();
+          const list = (data.projects ?? []) as Project[];
+          setProjects(list);
+          if (list.length === 1) setProjectId(list[0].id);
+        }
+        if (agentRes.ok) {
+          const data = await agentRes.json();
+          setAgents(
+            ((data.agents ?? []) as { id: string; name: string; phone: string }[]).map((a) => ({
+              id: a.id,
+              name: a.name,
+              phone: a.phone,
+            }))
+          );
+        }
+      }
+    );
   }, [open]);
 
   useEffect(() => {
@@ -77,6 +93,7 @@ export function AddCustomerModal({
     setStage("prospect");
     setProjectId("");
     setUnitId("");
+    setAgentId("");
     setUnits([]);
     setError("");
   }
@@ -111,6 +128,7 @@ export function AddCustomerModal({
         unit: selected.unitNumber,
         tower: selected.block,
         projectName: selectedProject?.name,
+        ...(agentId ? { assignedAgentId: agentId } : {}),
       }),
     });
     setLoading(false);
@@ -218,6 +236,15 @@ export function AddCustomerModal({
               Picked from inventory so status updates always match (e.g. A101, B102).
             </p>
           </label>
+
+          <AgentSearchSelect
+            agents={agents}
+            value={agentId}
+            onChange={setAgentId}
+            label="Sales agent"
+            placeholder="Search agent name (optional)"
+            optional
+          />
 
           <label className="block text-sm">
             <span className="mb-1 block font-medium">Initial status</span>

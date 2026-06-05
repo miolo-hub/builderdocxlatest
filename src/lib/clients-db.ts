@@ -152,6 +152,13 @@ export async function createClient(
     };
   }
 
+  if (data.assignedAgentId) {
+    const agent = await getPrisma().agent.findFirst({
+      where: { id: data.assignedAgentId, builderId },
+    });
+    if (!agent) throw new Error("Selected agent not found");
+  }
+
   const stage = data.stage ?? "prospect";
   const client = await getPrisma().client.create({
     data: {

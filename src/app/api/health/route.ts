@@ -7,6 +7,9 @@ export async function GET() {
     database_url: isDatabaseConfigured() ? "set" : "missing",
     jwt_secret: process.env.JWT_SECRET ? "set" : "missing",
     r2: isR2Configured() ? "set" : "missing",
+    interakt_api: process.env.INTERAKT_API_KEY ? "set" : "optional",
+    interakt_webhook: process.env.INTERAKT_WEBHOOK_SECRET ? "set" : "optional",
+    app_base_url: process.env.APP_BASE_URL ? "set" : "optional",
   };
 
   if (isDatabaseConfigured()) {

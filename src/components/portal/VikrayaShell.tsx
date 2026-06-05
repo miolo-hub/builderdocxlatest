@@ -10,7 +10,7 @@ const NAV = [
   { href: "/portal/clients", label: "Clients", icon: "👥" },
   { href: "/portal/deals", label: "Deals", icon: "📝" },
   { href: "/portal/payments", label: "Payments", icon: "💰" },
-  { href: "/portal/agents", label: "Agents & Commissions", icon: "🤝" },
+  { href: "/portal/agents", label: "Agents", icon: "🤝" },
   { href: "/portal/audit", label: "Activity Log", icon: "📋" },
   { href: "/simulator", label: "WhatsApp Simulator", icon: "💬" },
 ];
